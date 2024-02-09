@@ -44,7 +44,7 @@ public class CommandFramework implements CommandExecutor {
             @NotNull CommandSender sender,
             @NotNull org.bukkit.command.Command cmd,
             @NotNull String label,
-            @NotNull  String[] args) {
+            @NotNull String[] args) {
         return handleCommand(sender, cmd, label, args);
     }
 
@@ -89,7 +89,6 @@ public class CommandFramework implements CommandExecutor {
         return false;
     }
 
-
     private boolean checkPermission(CommandSender sender, Command command) {
         if (!command.permission().isEmpty() && !sender.hasPermission(command.permission())) {
             sender.sendMessage(command.noPerm());
@@ -107,7 +106,12 @@ public class CommandFramework implements CommandExecutor {
     }
 
     private void invokeCommandMethod(
-            CommandSender sender, org.bukkit.command.Command cmd, String cmdLabel, Method method, Object methodObject, String[] args) {
+            CommandSender sender,
+            org.bukkit.command.Command cmd,
+            String cmdLabel,
+            Method method,
+            Object methodObject,
+            String[] args) {
         try {
             method.invoke(methodObject, new CommandArgs(sender, cmd, cmdLabel, args, cmdLabel.split("\\.").length - 1));
         } catch (Exception e) {
@@ -124,7 +128,10 @@ public class CommandFramework implements CommandExecutor {
     private void registerCommandOrCompleter(Object obj, Method method) {
         if (isCommandMethod(method)) {
             registerCommandForMethod(obj, method);
-        } else if (isCompleterMethod(method)) {
+            return;
+        }
+
+        if (isCompleterMethod(method)) {
             registerCompleterForMethod(obj, method);
         }
     }
@@ -235,8 +242,7 @@ public class CommandFramework implements CommandExecutor {
         try {
             registerCompleterForPluginCommand(existingCommand, label, m, obj);
         } catch (Exception ex) {
-            log.error(
-                    "Unable to register tab completer {} for command '{}'. A tab completer is already registered for that command!",
+            log.error("Unable to register tab completer {} for command '{}'. A tab completer is already registered for that command!",
                     m.getName(),
                     label);
         }
@@ -254,26 +260,31 @@ public class CommandFramework implements CommandExecutor {
         command.completer.addCompleter(label, m, obj);
     }
 
-    private void registerCompleterForPluginCommand(Object command, String label, Method m, Object obj) throws Exception {
-        Field field = command.getClass().getDeclaredField("completer");
-        field.setAccessible(true);
+    private void registerCompleterForPluginCommand(Object command, String label, Method m, Object obj) {
+        try {
+            Field field = command.getClass().getDeclaredField("completer");
+            field.setAccessible(true);
 
-        Object completer = field.get(command);
-        if (completer == null) {
-            BukkitCompleter newCompleter = new BukkitCompleter();
-            newCompleter.addCompleter(label, m, obj);
-            field.set(command, newCompleter);
-            return;
+            Object completer = field.get(command);
+            if (completer == null) {
+                BukkitCompleter newCompleter = new BukkitCompleter();
+                newCompleter.addCompleter(label, m, obj);
+                field.set(command, newCompleter);
+                return;
+            }
+
+            if (completer instanceof BukkitCompleter bukkitCompleter) {
+                bukkitCompleter.addCompleter(label, m, obj);
+                return;
+            }
+
+            log.error("Unable to register tab completer {} for command '{}'. A tab completer is already registered for that command!",
+                    m.getName(),
+                    label);
+
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            log.error("Error while registering tab completer for command '{}'", label, e);
         }
-
-        if (completer instanceof BukkitCompleter) {
-            ((BukkitCompleter) completer).addCompleter(label, m, obj);
-            return;
-        }
-
-        log.error("Unable to register tab completer {} for command '{}'. A tab completer is already registered for that command!",
-                m.getName(),
-                label);
     }
 
     private void defaultCommand(CommandArgs args) {

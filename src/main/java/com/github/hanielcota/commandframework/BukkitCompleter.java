@@ -21,8 +21,7 @@ public class BukkitCompleter implements TabCompleter {
     }
 
     @Override
-    public List<String> onTabComplete(
-            @NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         for (int i = args.length; i >= 0; i--) {
             String cmdLabel = buildCmdLabel(label, args, i);
             if (completer.containsKey(cmdLabel)) {
@@ -46,8 +45,7 @@ public class BukkitCompleter implements TabCompleter {
         return buffer.toString();
     }
 
-    private List<String> invokeCompleter(
-            CommandSender sender, Command command, String label, String[] args, String cmdLabel) {
+    private List<String> invokeCompleter(CommandSender sender, Command command, String label, String[] args, String cmdLabel) {
         Entry<Method, Object> entry = completer.get(cmdLabel);
 
         if (entry == null) {
@@ -57,8 +55,7 @@ public class BukkitCompleter implements TabCompleter {
 
         try {
             Object result = entry.getKey()
-                    .invoke(
-                            entry.getValue(),
+                    .invoke(entry.getValue(),
                             new CommandArgs(sender, command, label, args, cmdLabel.split("\\.").length - 1));
 
             if (result instanceof List) {
@@ -66,8 +63,7 @@ public class BukkitCompleter implements TabCompleter {
             }
 
         } catch (IllegalAccessException | InvocationTargetException e) {
-            log.error(
-                    "Error invoking completer for command '{}' and label '{}': {}", label, cmdLabel, e.getMessage(), e);
+            log.error("Error invoking completer for command '{}' and label '{}': {}", label, cmdLabel, e.getMessage(), e);
         }
 
         return Collections.emptyList();
