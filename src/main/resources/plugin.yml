@@ -1,0 +1,4 @@
+name: CommandFramework
+version: '${version}'
+main: com.github.hanielcota.commandframework.CommandFrameworkPlugin
+api-version: '1.20'
