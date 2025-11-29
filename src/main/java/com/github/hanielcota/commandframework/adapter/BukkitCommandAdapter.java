@@ -27,6 +27,7 @@ import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.*;
 import java.util.Collection;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 @RequiredArgsConstructor
@@ -35,6 +36,9 @@ public class BukkitCommandAdapter {
 
     private static final Logger LOGGER = Logger.getLogger(BukkitCommandAdapter.class.getSimpleName());
     private static CommandMap CACHED_COMMAND_MAP;
+    
+    // Cache de instâncias de providers de tab completion para evitar reflexão repetida
+    private static final Map<Class<?>, Object> PROVIDER_CACHE = new ConcurrentHashMap<>();
 
     Plugin plugin;
     CooldownService cooldownService;
@@ -91,6 +95,7 @@ public class BukkitCommandAdapter {
         private final CommandMetadata metadata;
         private final Map<String, Method> subCommands = new HashMap<>();
         private final Map<String, String[]> subCommandPartsCache = new HashMap<>();
+        private final Map<Method, MethodMetadata> methodMetadataCache = new HashMap<>();
         private Method defaultMethod;
         private final RequiredPermission classPermission;
         private final Cooldown classCooldown;
@@ -114,6 +119,7 @@ public class BukkitCommandAdapter {
                 if (method.isAnnotationPresent(DefaultCommand.class)) {
                     this.defaultMethod = method;
                     method.setAccessible(true);
+                    cacheMethodMetadata(method);
                 }
                 if (method.isAnnotationPresent(SubCommand.class)) {
                     var subAnnotation = method.getAnnotation(SubCommand.class);
@@ -122,9 +128,25 @@ public class BukkitCommandAdapter {
                     // Cachea os parts do subcomando para evitar split repetido
                     subCommandPartsCache.put(subPath, subPath.split(" "));
                     method.setAccessible(true);
+                    cacheMethodMetadata(method);
                 }
             }
         }
+        
+        /**
+         * Cacheia as annotations do método para evitar reflexão repetida durante execução.
+         */
+        private void cacheMethodMetadata(Method method) {
+            var cooldown = method.getAnnotation(Cooldown.class);
+            var permission = method.getAnnotation(RequiredPermission.class);
+            var isAsync = method.isAnnotationPresent(Async.class);
+            methodMetadataCache.put(method, new MethodMetadata(cooldown, permission, isAsync));
+        }
+        
+        /**
+         * Record para armazenar metadata cacheada de um método.
+         */
+        private record MethodMetadata(Cooldown cooldown, RequiredPermission permission, boolean isAsync) {}
 
         @Override
         public boolean execute(CommandSender sender, String label, String[] args) {
@@ -150,11 +172,8 @@ public class BukkitCommandAdapter {
                     return true;
                 }
 
-                // Verifica permissão do método
-                var methodPermission = defaultMethod.getAnnotation(RequiredPermission.class);
-                if (methodPermission != null && !sender.hasPermission(methodPermission.value())) {
-                    errorHandler.handleNoPermission(sender, methodPermission.value())
-                        .ifPresent(sender::sendMessage);
+                // Verifica permissão do método (usando cache)
+                if (!hasMethodPermission(sender, defaultMethod)) {
                     return true;
                 }
 
@@ -167,11 +186,8 @@ public class BukkitCommandAdapter {
             if (subCommandPath != null) {
                 var method = subCommands.get(subCommandPath.path.toLowerCase());
                 if (method != null) {
-                    // Verifica permissão do método
-                    var methodPermission = method.getAnnotation(RequiredPermission.class);
-                    if (methodPermission != null && !sender.hasPermission(methodPermission.value())) {
-                        errorHandler.handleNoPermission(sender, methodPermission.value())
-                            .ifPresent(sender::sendMessage);
+                    // Verifica permissão do método (usando cache)
+                    if (!hasMethodPermission(sender, method)) {
                         return true;
                     }
 
@@ -187,16 +203,31 @@ public class BukkitCommandAdapter {
                 return true;
             }
 
-            // Verifica permissão do método
-            var methodPermission = defaultMethod.getAnnotation(RequiredPermission.class);
-            if (methodPermission != null && !sender.hasPermission(methodPermission.value())) {
-                errorHandler.handleNoPermission(sender, methodPermission.value())
-                    .ifPresent(sender::sendMessage);
+            // Verifica permissão do método (usando cache)
+            if (!hasMethodPermission(sender, defaultMethod)) {
                 return true;
             }
 
             executeMethod(sender, defaultMethod, args);
             return true;
+        }
+        
+        /**
+         * Verifica se o sender tem permissão para executar o método usando cache.
+         * @return true se tem permissão, false se não tem (já envia mensagem de erro)
+         */
+        private boolean hasMethodPermission(CommandSender sender, Method method) {
+            var metadata = methodMetadataCache.get(method);
+            if (metadata == null || metadata.permission() == null) {
+                return true;
+            }
+            var permission = metadata.permission().value();
+            if (sender.hasPermission(permission)) {
+                return true;
+            }
+            errorHandler.handleNoPermission(sender, permission)
+                .ifPresent(sender::sendMessage);
+            return false;
         }
 
         private SubCommandMatch findSubCommandPath(String[] args) {
@@ -231,8 +262,9 @@ public class BukkitCommandAdapter {
                 return;
             }
 
-            // Verifica se o método deve ser executado assincronamente
-            boolean isAsync = method.isAnnotationPresent(Async.class);
+            // Usa cache para verificar se o método deve ser executado assincronamente
+            var metadata = methodMetadataCache.get(method);
+            boolean isAsync = metadata != null && metadata.isAsync();
             
             if (isAsync) {
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> doExecuteMethod(sender, method, args));
@@ -248,8 +280,9 @@ public class BukkitCommandAdapter {
             }
 
             try {
-                // Verifica cooldown (primeiro do método, depois da classe se não encontrar - usando cache)
-                var cooldown = method.getAnnotation(Cooldown.class);
+                // Verifica cooldown usando cache (primeiro do método, depois da classe)
+                var metadata = methodMetadataCache.get(method);
+                var cooldown = metadata != null ? metadata.cooldown() : null;
                 if (cooldown == null) {
                     cooldown = classCooldown;
                 }
@@ -769,7 +802,12 @@ public class BukkitCommandAdapter {
         private List<String> getProviderCompletions(Class<?> providerClass, String input) {
             var completions = new ArrayList<String>();
             try {
-                var provider = providerClass.getDeclaredConstructor().newInstance();
+                // Usa cache para evitar criação de nova instância a cada tab completion
+                var provider = getOrCreateProvider(providerClass);
+                if (provider == null) {
+                    return completions;
+                }
+                
                 var methods = providerClass.getDeclaredMethods();
                 for (var method : methods) {
                     var methodName = method.getName();
@@ -797,7 +835,23 @@ public class BukkitCommandAdapter {
             }
             return completions;
         }
+        
+        /**
+         * Obtém ou cria uma instância do provider usando cache estático.
+         * Evita reflexão repetida para criação de instâncias.
+         */
+        private Object getOrCreateProvider(Class<?> providerClass) {
+            return PROVIDER_CACHE.computeIfAbsent(providerClass, clazz -> {
+                try {
+                    return clazz.getDeclaredConstructor().newInstance();
+                } catch (Exception e) {
+                    LOGGER.warning("[CommandFramework] Erro ao criar provider: " + e.getMessage());
+                    return null;
+                }
+            });
+        }
 
         private record SubCommandMatch(String path, String[] remainingArgs) {}
     }
 }
+
