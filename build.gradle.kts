@@ -39,6 +39,15 @@ tasks.test {
     useJUnitPlatform()
 }
 
+tasks.withType<JavaCompile> {
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing"))
+}
+
+tasks.withType<Javadoc> {
+    // Desabilita warnings de documentação faltando
+    (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
+}
+
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {

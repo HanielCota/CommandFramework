@@ -16,7 +16,6 @@ import lombok.experimental.FieldDefaults;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.defaults.BukkitCommand;
@@ -26,7 +25,6 @@ import org.bukkit.plugin.Plugin;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.*;
-import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -281,8 +279,8 @@ public class BukkitCommandAdapter {
 
             try {
                 // Verifica cooldown usando cache (primeiro do método, depois da classe)
-                var metadata = methodMetadataCache.get(method);
-                var cooldown = metadata != null ? metadata.cooldown() : null;
+                var methodMeta = methodMetadataCache.get(method);
+                var cooldown = methodMeta != null ? methodMeta.cooldown() : null;
                 if (cooldown == null) {
                     cooldown = classCooldown;
                 }
@@ -651,10 +649,6 @@ public class BukkitCommandAdapter {
             
             if (hasStringArrayParam) {
                 return getStringArrayCompletions(method, paramIndex, input, completions, commandArgCount);
-            }
-            
-            if (hasStringArrayParam && paramIndex >= commandArgCount) {
-                return completions;
             }
 
             var methodTabCompletion = method.getAnnotation(TabCompletion.class);

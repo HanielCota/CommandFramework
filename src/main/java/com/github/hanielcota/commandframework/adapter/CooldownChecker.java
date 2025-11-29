@@ -4,7 +4,6 @@ import com.github.hanielcota.commandframework.annotation.Cooldown;
 import com.github.hanielcota.commandframework.cooldown.CooldownKey;
 import com.github.hanielcota.commandframework.cooldown.CooldownService;
 import com.github.hanielcota.commandframework.error.GlobalErrorHandler;
-import com.github.hanielcota.commandframework.value.CooldownSeconds;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -82,8 +81,7 @@ public class CooldownChecker {
     }
 
     private void applyCooldown(CooldownKey key, Cooldown cooldown) {
-        var seconds = new CooldownSeconds((int) cooldown.seconds());
-        var duration = seconds.toDuration();
+        var duration = Duration.ofSeconds(cooldown.seconds());
         cooldownService.putOnCooldown(key, duration);
     }
 }

@@ -17,6 +17,8 @@ import org.bukkit.plugin.Plugin;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -32,6 +34,18 @@ public class CommandProcessor {
     CooldownService cooldownService;
     GlobalErrorHandler errorHandler;
     BukkitCommandAdapter adapter;
+    
+    /**
+     * Set de comandos registrados manualmente (com prioridade sobre scan automático).
+     * Armazena o nome do comando em lowercase.
+     */
+    Set<String> manuallyRegisteredCommands = ConcurrentHashMap.newKeySet();
+    
+    /**
+     * Set de todos os comandos registrados (para evitar duplicatas).
+     * Armazena o nome do comando em lowercase.
+     */
+    Set<String> registeredCommands = ConcurrentHashMap.newKeySet();
 
     public CommandProcessor(Plugin plugin, ArgumentParserRegistry parserRegistry, CommandExecutor executor,
                            CooldownService cooldownService, GlobalErrorHandler errorHandler) {
@@ -52,14 +66,29 @@ public class CommandProcessor {
         LOGGER.info("[CommandFramework] Processando " + definitions.size() + " comandos...");
 
         for (var definition : definitions) {
+            var commandName = definition.getAnnotation().name().toLowerCase();
+            
+            // Verifica se o comando já foi registrado manualmente (tem prioridade)
+            if (manuallyRegisteredCommands.contains(commandName)) {
+                LOGGER.info("[CommandFramework] Comando /" + commandName + " já foi registrado manualmente, ignorando scan automático");
+                continue;
+            }
+            
+            // Verifica se o comando já foi registrado pelo scan
+            if (registeredCommands.contains(commandName)) {
+                LOGGER.info("[CommandFramework] Comando /" + commandName + " já está registrado, ignorando duplicata");
+                continue;
+            }
+            
             var metadata = toMetadata(definition);
             if (metadata == null) {
                 LOGGER.warning("[CommandFramework] Falha ao criar metadata para: " + definition.getType().getName());
                 continue;
             }
 
-            LOGGER.info("[CommandFramework] Registrando comando: " + definition.getAnnotation().name());
+            LOGGER.info("[CommandFramework] Registrando comando: " + commandName);
             adapter.register(metadata);
+            registeredCommands.add(commandName);
         }
 
         LOGGER.info("[CommandFramework] Comandos registrados com sucesso!");
@@ -137,6 +166,8 @@ public class CommandProcessor {
 
     /**
      * Registra um comando diretamente a partir de uma instância.
+     * Comandos registrados manualmente têm prioridade sobre o scan automático.
+     * Se o comando já estiver registrado, será substituído pela nova instância.
      * 
      * @param instance Instância do comando (deve ter a anotação @Command)
      */
@@ -152,14 +183,25 @@ public class CommandProcessor {
             return;
         }
 
+        var commandName = definition.getAnnotation().name().toLowerCase();
+        
+        // Marca como registrado manualmente (tem prioridade sobre scan automático)
+        manuallyRegisteredCommands.add(commandName);
+        
+        // Se já estava registrado pelo scan, vai sobrescrever
+        if (registeredCommands.contains(commandName)) {
+            LOGGER.info("[CommandFramework] Substituindo comando /" + commandName + " por instância com dependências");
+        }
+
         var metadata = toMetadata(definition, instance);
         if (metadata == null) {
             LOGGER.warning("[CommandFramework] Falha ao criar metadata para: " + instance.getClass().getName());
             return;
         }
 
-        LOGGER.info("[CommandFramework] Registrando comando: " + definition.getAnnotation().name());
+        LOGGER.info("[CommandFramework] Registrando comando manualmente: " + commandName);
         adapter.register(metadata);
+        registeredCommands.add(commandName);
     }
 
     /**
@@ -226,5 +268,31 @@ public class CommandProcessor {
             .instance(instance)
             .handlers(definition.getHandlers())
             .build();
+    }
+    
+    /**
+     * Verifica se um comando já está registrado.
+     * 
+     * @param commandName Nome do comando (case-insensitive)
+     * @return true se o comando já está registrado
+     */
+    public boolean isRegistered(String commandName) {
+        if (commandName == null || commandName.isBlank()) {
+            return false;
+        }
+        return registeredCommands.contains(commandName.toLowerCase());
+    }
+    
+    /**
+     * Verifica se um comando foi registrado manualmente (com dependências).
+     * 
+     * @param commandName Nome do comando (case-insensitive)
+     * @return true se o comando foi registrado manualmente
+     */
+    public boolean isManuallyRegistered(String commandName) {
+        if (commandName == null || commandName.isBlank()) {
+            return false;
+        }
+        return manuallyRegisteredCommands.contains(commandName.toLowerCase());
     }
 }

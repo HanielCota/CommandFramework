@@ -41,6 +41,7 @@ public class CommandFramework {
         this.state = new FrameworkState();
     }
 
+    @SuppressWarnings("unused") // handlerCache é parte da API pública, pode ser usado por consumidores
     public static CommandFramework create(Plugin plugin, MessageProvider messageProvider, Cache<Class<?>, Object> handlerCache) {
         var initializer = new FrameworkInitializer(plugin);
         var configuration = initializer.initialize(messageProvider);
