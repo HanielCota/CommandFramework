@@ -10,7 +10,7 @@ java {
     withSourcesJar()
 }
 
-group = "com.seuprojeto"
+group = "com.github.hanielcota"
 version = "0.1.0-SNAPSHOT"
 
 repositories {
@@ -47,7 +47,7 @@ publishing {
             pom {
                 name.set("Command Framework")
                 description.set("Command Framework completa para Paper/Purpur 1.21+ baseada em Brigadier")
-                url.set("https://github.com/seuprojeto/CommandFramework")
+                url.set("https://github.com/hanielcota/CommandFramework")
                 
                 licenses {
                     license {
@@ -58,15 +58,15 @@ publishing {
                 
                 developers {
                     developer {
-                        id.set("seuprojeto")
-                        name.set("Seu Projeto")
+                        id.set("hanielcota")
+                        name.set("Haniel Cota")
                     }
                 }
                 
                 scm {
-                    connection.set("scm:git:git://github.com/seuprojeto/CommandFramework.git")
-                    developerConnection.set("scm:git:ssh://github.com:seuprojeto/CommandFramework.git")
-                    url.set("https://github.com/seuprojeto/CommandFramework/tree/main")
+                    connection.set("scm:git:git://github.com/hanielcota/CommandFramework.git")
+                    developerConnection.set("scm:git:ssh://github.com:hanielcota/CommandFramework.git")
+                    url.set("https://github.com/hanielcota/CommandFramework/tree/main")
                 }
             }
         }
