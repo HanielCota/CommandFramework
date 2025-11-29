@@ -25,6 +25,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Constrói árvores de comandos Brigadier a partir de metadados de comandos.
+ * Converte anotações e métodos em estruturas de comandos do Brigadier.
+ */
 @RequiredArgsConstructor
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class BrigadierTreeBuilder {
@@ -35,6 +39,12 @@ public class BrigadierTreeBuilder {
     CooldownService cooldownService;
     GlobalErrorHandler errorHandler;
 
+    /**
+     * Constrói e registra um comando no dispatcher do Brigadier.
+     *
+     * @param dispatcher Dispatcher do Brigadier onde registrar o comando
+     * @param metadata   Metadados do comando a ser construído
+     */
     public void buildAndRegister(CommandDispatcher<CommandSender> dispatcher, CommandMetadata metadata) {
         if (dispatcher == null) {
             return;

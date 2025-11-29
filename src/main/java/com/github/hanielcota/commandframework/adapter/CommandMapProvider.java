@@ -5,10 +5,19 @@ import org.bukkit.command.CommandMap;
 
 import java.util.logging.Logger;
 
+/**
+ * Fornece acesso ao CommandMap do servidor Bukkit.
+ * Utiliza cache para evitar múltiplas chamadas de reflexão.
+ */
 public class CommandMapProvider {
     private static final Logger LOGGER = Logger.getLogger(CommandMapProvider.class.getSimpleName());
     private static CommandMap cachedCommandMap;
 
+    /**
+     * Obtém o CommandMap do servidor, utilizando cache quando disponível.
+     *
+     * @return O CommandMap do servidor, ou null se não for possível obter
+     */
     public CommandMap getCommandMap() {
         if (cachedCommandMap != null) {
             return cachedCommandMap;

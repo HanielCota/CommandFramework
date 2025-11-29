@@ -14,9 +14,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
+/**
+ * Gera sugestões de tab completion para comandos.
+ * Suporta sugestões estáticas, dinâmicas via providers e sugestões padrão baseadas em tipos.
+ */
 public class TabCompleter {
     private static final Logger LOGGER = Logger.getLogger(TabCompleter.class.getSimpleName());
 
+    /**
+     * Gera completions baseado nos argumentos fornecidos.
+     *
+     * @param args                  Argumentos do comando
+     * @param subCommandPartsCache  Cache dos parts dos subcomandos
+     * @param defaultMethod         Método default do comando
+     * @param subCommands           Mapa de subcomandos
+     * @return Lista de sugestões de completion
+     */
     public List<String> complete(String[] args, Map<String, String[]> subCommandPartsCache, Method defaultMethod, Map<String, Method> subCommands) {
         var completions = new TabCompletions();
         if (args == null || args.length == 0) {

@@ -5,13 +5,30 @@ import com.github.hanielcota.commandframework.value.SubCommandPath;
 
 import java.util.Map;
 
+/**
+ * Encontra subcomandos correspondentes em uma lista de argumentos.
+ * Suporta subcomandos de até 3 níveis de profundidade.
+ */
 public class SubCommandFinder {
     private final Map<String, String[]> subCommandPartsCache;
 
+    /**
+     * Cria uma instância do finder de subcomandos.
+     *
+     * @param subCommandPartsCache Cache dos parts dos subcomandos para otimização
+     */
     public SubCommandFinder(Map<String, String[]> subCommandPartsCache) {
         this.subCommandPartsCache = subCommandPartsCache;
     }
 
+    /**
+     * Encontra o subcomando correspondente aos argumentos fornecidos.
+     * Busca do maior nível de profundidade (3) até o menor (1).
+     *
+     * @param args        Argumentos do comando
+     * @param subCommands Mapa de paths de subcomandos para métodos
+     * @return Match encontrado ou null se nenhum subcomando corresponder
+     */
     public SubCommandMatch findSubCommand(String[] args, Map<String, java.lang.reflect.Method> subCommands) {
         if (args.length == 0) {
             return null;
@@ -56,6 +73,12 @@ public class SubCommandFinder {
         return new RemainingArguments(remaining);
     }
 
+    /**
+     * Representa um match de subcomando encontrado.
+     *
+     * @param path          Path do subcomando encontrado
+     * @param remainingArgs Argumentos restantes após o subcomando
+     */
     public record SubCommandMatch(String path, RemainingArguments remainingArgs) {}
 }
 

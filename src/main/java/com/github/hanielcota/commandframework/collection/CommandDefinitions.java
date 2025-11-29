@@ -5,6 +5,9 @@ import com.github.hanielcota.commandframework.registry.CommandDefinition;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Coleção de definições de comandos.
+ */
 public class CommandDefinitions {
     private final List<CommandDefinition> definitions;
 

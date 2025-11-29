@@ -9,7 +9,19 @@ import org.bukkit.entity.Player;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 
+/**
+ * Invoca métodos de comandos, resolvendo parâmetros automaticamente.
+ * Suporta tipos como CommandSender, Player, String, Integer, Double, Boolean, etc.
+ */
 public class MethodInvoker {
+    /**
+     * Invoca um método de comando, resolvendo parâmetros e tratando o resultado.
+     *
+     * @param sender   Quem executou o comando
+     * @param method   Método a ser invocado
+     * @param instance Instância onde invocar o método
+     * @param args     Argumentos do comando
+     */
     public void invoke(CommandSender sender, Method method, Object instance, String[] args) {
         var parameters = method.getParameters();
         var invokeArgs = buildInvokeArgs(sender, parameters, args);

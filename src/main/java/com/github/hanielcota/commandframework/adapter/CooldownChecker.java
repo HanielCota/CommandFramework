@@ -11,15 +11,36 @@ import org.bukkit.entity.Player;
 import java.time.Duration;
 import java.util.UUID;
 
+/**
+ * Responsável por verificar e aplicar cooldowns em comandos.
+ * Prioriza cooldowns definidos em métodos sobre cooldowns de classe.
+ */
 public class CooldownChecker {
     private final CooldownService cooldownService;
     private final GlobalErrorHandler errorHandler;
 
+    /**
+     * Cria uma instância do verificador de cooldown.
+     *
+     * @param cooldownService Serviço de gerenciamento de cooldowns
+     * @param errorHandler    Handler para mensagens de erro
+     */
     public CooldownChecker(CooldownService cooldownService, GlobalErrorHandler errorHandler) {
         this.cooldownService = cooldownService;
         this.errorHandler = errorHandler;
     }
 
+    /**
+     * Verifica se o comando está em cooldown e aplica o cooldown se necessário.
+     * Se o comando estiver em cooldown, envia mensagem de erro ao sender.
+     *
+     * @param sender        Quem executou o comando
+     * @param commandName   Nome do comando
+     * @param methodName    Nome do método executado
+     * @param methodCooldown Cooldown do método (prioritário)
+     * @param classCooldown  Cooldown da classe (fallback)
+     * @return true se o comando pode ser executado, false se está em cooldown
+     */
     public boolean checkAndApplyCooldown(CommandSender sender, String commandName, String methodName, Cooldown methodCooldown, Cooldown classCooldown) {
         var cooldown = resolveCooldown(methodCooldown, classCooldown);
         if (cooldown == null) {

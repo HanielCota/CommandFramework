@@ -1,5 +1,10 @@
 package com.github.hanielcota.commandframework.value;
 
+/**
+ * Representa o path de um subcomando (ex: "player set").
+ *
+ * @param value Path do subcomando (não pode ser nulo)
+ */
 public record SubCommandPath(String value) {
     public SubCommandPath {
         if (value == null) {

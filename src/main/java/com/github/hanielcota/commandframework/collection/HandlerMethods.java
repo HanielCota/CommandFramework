@@ -4,6 +4,9 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Coleção de métodos de handlers de comandos.
+ */
 public class HandlerMethods {
     private final List<Method> methods;
 
