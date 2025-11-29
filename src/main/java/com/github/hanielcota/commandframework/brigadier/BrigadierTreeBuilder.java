@@ -176,6 +176,14 @@ public class BrigadierTreeBuilder {
             return 0;
         }
 
+        // Verifica permissão do método
+        var methodPermission = findPermission(method);
+        if (methodPermission != null && !hasPermission(sender, methodPermission.value())) {
+            errorHandler.handleNoPermission(sender, methodPermission.value())
+                .ifPresent(sender::sendMessage);
+            return 0;
+        }
+
         var invocationContext = CommandInvocationContext.builder()
             .sender(sender)
             .label(metadata.getCommandAnnotation().name())
@@ -185,7 +193,7 @@ public class BrigadierTreeBuilder {
             .handlerInstance(metadata.getInstance())
             .build();
 
-        checkCooldownAndExecute(invocationContext, metadata.getCommandAnnotation().name(), null);
+        checkCooldownAndExecute(invocationContext, metadata, null);
         return 1;
     }
 
@@ -200,6 +208,14 @@ public class BrigadierTreeBuilder {
             return 0;
         }
 
+        // Verifica permissão do método (verificação adicional para garantir mensagem de erro)
+        var methodPermission = findPermission(handler);
+        if (methodPermission != null && !hasPermission(sender, methodPermission.value())) {
+            errorHandler.handleNoPermission(sender, methodPermission.value())
+                .ifPresent(sender::sendMessage);
+            return 0;
+        }
+
         var invocationContext = CommandInvocationContext.builder()
             .sender(sender)
             .label(metadata.getCommandAnnotation().name())
@@ -209,19 +225,22 @@ public class BrigadierTreeBuilder {
             .handlerInstance(metadata.getInstance())
             .build();
 
-        checkCooldownAndExecute(invocationContext, metadata.getCommandAnnotation().name(), subAnnotation.value());
+        checkCooldownAndExecute(invocationContext, metadata, subAnnotation.value());
         return 1;
     }
 
-    private void checkCooldownAndExecute(CommandInvocationContext context, String command, String sub) {
+    private void checkCooldownAndExecute(CommandInvocationContext context, CommandMetadata metadata, String sub) {
         var sender = context.getSender();
         var uuid = senderUUID(sender);
+        var command = metadata.getCommandAnnotation().name();
 
-        var cooldown = findCooldown(context.getHandlerMethod());
+        // Verifica cooldown do método primeiro, depois da classe
+        var cooldown = findCooldown(context.getHandlerMethod(), metadata.getType());
         if (cooldown != null) {
             var key = new CooldownKey(uuid, command, sub);
-            if (cooldownService.isOnCooldown(key)) {
-                errorHandler.handleCooldown(sender, Duration.ofSeconds(cooldown.seconds()));
+            var remainingTime = cooldownService.getRemainingTime(key);
+            if (remainingTime.isPresent()) {
+                errorHandler.handleCooldown(sender, remainingTime.get());
                 return;
             }
 
@@ -308,12 +327,27 @@ public class BrigadierTreeBuilder {
         return method.getAnnotation(RequiredPermission.class);
     }
 
-    private Cooldown findCooldown(Method method) {
+    /**
+     * Busca anotação @Cooldown primeiro no método, depois na classe.
+     * Permite herança de cooldown da classe para todos os métodos.
+     */
+    private Cooldown findCooldown(Method method, Class<?> type) {
         if (method == null) {
             return null;
         }
 
-        return method.getAnnotation(Cooldown.class);
+        // Primeiro tenta o método
+        var methodCooldown = method.getAnnotation(Cooldown.class);
+        if (methodCooldown != null) {
+            return methodCooldown;
+        }
+
+        // Depois tenta a classe
+        if (type != null) {
+            return type.getAnnotation(Cooldown.class);
+        }
+
+        return null;
     }
 
     private boolean hasPermission(CommandSender sender, String permission) {
@@ -336,4 +370,3 @@ public class BrigadierTreeBuilder {
         return UUID.fromString("00000000-0000-0000-0000-000000000000");
     }
 }
-

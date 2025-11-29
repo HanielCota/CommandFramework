@@ -1,28 +1,22 @@
 package com.github.hanielcota.commandframework.parser;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-@RequiredArgsConstructor
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class ArgumentParserRegistry {
 
-    Cache<Class<?>, ArgumentParser<?>> cache;
-    Map<Class<?>, ArgumentParser<?>> overrides = new ConcurrentHashMap<>();
+    Map<Class<?>, ArgumentParser<?>> parsers = new ConcurrentHashMap<>();
+
+    private ArgumentParserRegistry() {
+    }
 
     public static ArgumentParserRegistry create() {
-        Cache<Class<?>, ArgumentParser<?>> cache = Caffeine.newBuilder()
-            .maximumSize(128)
-            .build();
-
-        return new ArgumentParserRegistry(cache);
+        return new ArgumentParserRegistry();
     }
 
     public <T> void register(ArgumentParser<T> parser) {
@@ -30,8 +24,7 @@ public class ArgumentParserRegistry {
             return;
         }
 
-        overrides.put(parser.type(), parser);
-        cache.put(parser.type(), parser);
+        parsers.put(parser.type(), parser);
     }
 
     @SuppressWarnings("unchecked")
@@ -40,18 +33,25 @@ public class ArgumentParserRegistry {
             return Optional.empty();
         }
 
-        var overridden = Optional.ofNullable(overrides.get(type));
-        if (overridden.isPresent()) {
-            return overridden.map(p -> (ArgumentParser<T>) p);
-        }
-
-        var cached = Optional.ofNullable(cache.getIfPresent(type));
-        if (cached.isPresent()) {
-            return cached.map(p -> (ArgumentParser<T>) p);
+        var parser = parsers.get(type);
+        if (parser != null) {
+            return Optional.of((ArgumentParser<T>) parser);
         }
 
         return Optional.empty();
     }
+
+    public boolean hasParser(Class<?> type) {
+        if (type == null) {
+            return false;
+        }
+        return parsers.containsKey(type);
+    }
+
+    public void unregister(Class<?> type) {
+        if (type == null) {
+            return;
+        }
+        parsers.remove(type);
+    }
 }
-
-

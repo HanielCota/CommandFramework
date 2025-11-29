@@ -1,7 +1,9 @@
 package com.github.hanielcota.commandframework.processor;
 
-import com.mojang.brigadier.CommandDispatcher;
-import com.github.hanielcota.commandframework.brigadier.BrigadierTreeBuilder;
+import com.github.hanielcota.commandframework.adapter.BukkitCommandAdapter;
+import com.github.hanielcota.commandframework.annotation.Command;
+import com.github.hanielcota.commandframework.annotation.DefaultCommand;
+import com.github.hanielcota.commandframework.annotation.SubCommand;
 import com.github.hanielcota.commandframework.brigadier.CommandMetadata;
 import com.github.hanielcota.commandframework.cooldown.CooldownService;
 import com.github.hanielcota.commandframework.error.GlobalErrorHandler;
@@ -9,51 +11,58 @@ import com.github.hanielcota.commandframework.execution.CommandExecutor;
 import com.github.hanielcota.commandframework.parser.ArgumentParserRegistry;
 import com.github.hanielcota.commandframework.registry.CommandDefinition;
 import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.bukkit.Bukkit;
-import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.Plugin;
 
+import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
-@RequiredArgsConstructor
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class CommandProcessor {
+
+    private static final Logger LOGGER = Logger.getLogger(CommandProcessor.class.getSimpleName());
 
     Plugin plugin;
     ArgumentParserRegistry parserRegistry;
     CommandExecutor executor;
     CooldownService cooldownService;
     GlobalErrorHandler errorHandler;
+    BukkitCommandAdapter adapter;
+
+    public CommandProcessor(Plugin plugin, ArgumentParserRegistry parserRegistry, CommandExecutor executor,
+                           CooldownService cooldownService, GlobalErrorHandler errorHandler) {
+        this.plugin = plugin;
+        this.parserRegistry = parserRegistry;
+        this.executor = executor;
+        this.cooldownService = cooldownService;
+        this.errorHandler = errorHandler;
+        this.adapter = new BukkitCommandAdapter(plugin, cooldownService, errorHandler);
+    }
 
     public void processAndRegister(List<CommandDefinition> definitions) {
         if (definitions == null || definitions.isEmpty()) {
+            LOGGER.warning("[CommandFramework] Nenhuma definição de comando para processar");
             return;
         }
 
-        var dispatcher = getDispatcher();
-        if (dispatcher.isEmpty()) {
-            return;
-        }
-
-        var builder = new BrigadierTreeBuilder(
-            plugin,
-            parserRegistry,
-            executor,
-            cooldownService,
-            errorHandler
-        );
+        LOGGER.info("[CommandFramework] Processando " + definitions.size() + " comandos...");
 
         for (var definition : definitions) {
             var metadata = toMetadata(definition);
             if (metadata == null) {
+                LOGGER.warning("[CommandFramework] Falha ao criar metadata para: " + definition.getType().getName());
                 continue;
             }
 
-            builder.buildAndRegister(dispatcher.get(), metadata);
+            LOGGER.info("[CommandFramework] Registrando comando: " + definition.getAnnotation().name());
+            adapter.register(metadata);
         }
+
+        LOGGER.info("[CommandFramework] Comandos registrados com sucesso!");
     }
 
     private CommandMetadata toMetadata(CommandDefinition definition) {
@@ -101,6 +110,7 @@ public class CommandProcessor {
 
             return constructor.newInstance(args);
         } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "[CommandFramework] Erro ao criar instância de " + type.getName() + ": " + e.getMessage(), e);
             return null;
         }
     }
@@ -133,20 +143,99 @@ public class CommandProcessor {
         return null;
     }
 
-    private Optional<CommandDispatcher<CommandSender>> getDispatcher() {
-        try {
-            var server = Bukkit.getServer();
-            var method = server.getClass().getMethod("getCommandDispatcher");
-            var dispatcher = method.invoke(server);
-            if (dispatcher instanceof CommandDispatcher<?> d) {
-                @SuppressWarnings("unchecked")
-                var typed = (CommandDispatcher<CommandSender>) d;
-                return Optional.of(typed);
-            }
-        } catch (Exception ignored) {
+    /**
+     * Registra um comando diretamente a partir de uma instância.
+     * 
+     * @param instance Instância do comando (deve ter a anotação @Command)
+     */
+    public void register(Object instance) {
+        if (instance == null) {
+            LOGGER.warning("[CommandFramework] Tentativa de registrar comando nulo");
+            return;
         }
 
-        return Optional.empty();
+        var definition = toDefinition(instance);
+        if (definition == null) {
+            LOGGER.warning("[CommandFramework] Falha ao criar definição para: " + instance.getClass().getName());
+            return;
+        }
+
+        var metadata = toMetadata(definition, instance);
+        if (metadata == null) {
+            LOGGER.warning("[CommandFramework] Falha ao criar metadata para: " + instance.getClass().getName());
+            return;
+        }
+
+        LOGGER.info("[CommandFramework] Registrando comando: " + definition.getAnnotation().name());
+        adapter.register(metadata);
+    }
+
+    /**
+     * Registra um comando a partir de uma classe (cria a instância automaticamente).
+     * 
+     * @param commandClass Classe do comando (deve ter a anotação @Command)
+     */
+    public void register(Class<?> commandClass) {
+        if (commandClass == null) {
+            LOGGER.warning("[CommandFramework] Tentativa de registrar classe nula");
+            return;
+        }
+
+        var instance = createInstance(commandClass);
+        if (instance == null) {
+            LOGGER.warning("[CommandFramework] Falha ao criar instância de: " + commandClass.getName());
+            return;
+        }
+
+        register(instance);
+    }
+
+    private CommandDefinition toDefinition(Object instance) {
+        if (instance == null) {
+            return null;
+        }
+
+        var type = instance.getClass();
+        var annotation = type.getAnnotation(Command.class);
+        if (annotation == null) {
+            LOGGER.warning("[CommandFramework] Classe " + type.getName() + " não possui anotação @Command");
+            return null;
+        }
+
+        var methods = findHandlerMethods(type);
+        return CommandDefinition.builder()
+            .annotation(annotation)
+            .type(type)
+            .handlers(methods)
+            .build();
+    }
+
+    private static List<Method> findHandlerMethods(Class<?> type) {
+        if (type == null) {
+            return List.of();
+        }
+
+        var methods = type.getDeclaredMethods();
+        if (methods.length == 0) {
+            return List.of();
+        }
+
+        return Arrays.stream(methods)
+            .filter(method -> method.isAnnotationPresent(SubCommand.class) || method.isAnnotationPresent(DefaultCommand.class))
+            .peek(method -> method.setAccessible(true))
+            .collect(Collectors.toList());
+    }
+
+    private CommandMetadata toMetadata(CommandDefinition definition, Object instance) {
+        if (definition == null || instance == null) {
+            return null;
+        }
+
+        return CommandMetadata.builder()
+            .commandAnnotation(definition.getAnnotation())
+            .type(definition.getType())
+            .instance(instance)
+            .handlers(definition.getHandlers())
+            .build();
     }
 }
-

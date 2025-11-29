@@ -13,7 +13,16 @@ import java.lang.annotation.Target;
 public @interface TabCompletion {
 
     /**
+     * Sugestões estáticas para tab completion.
+     * Pode ser usado diretamente: @TabCompletion("1", "2", "3")
+     * ou com nome: @TabCompletion(value = {"1", "2", "3"})
+     */
+    String[] value() default {};
+
+    /**
      * Classe que implementa SuggestionProvider para este argumento.
+     * Usado quando sugestões dinâmicas são necessárias.
+     * Exemplo: @TabCompletion(provider = PlayerSuggestionProvider.class)
      */
     Class<? extends SuggestionProvider<CommandSender>> provider() default NoProvider.class;
 

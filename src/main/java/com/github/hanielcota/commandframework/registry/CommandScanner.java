@@ -1,6 +1,7 @@
 package com.github.hanielcota.commandframework.registry;
 
 import com.github.hanielcota.commandframework.annotation.Command;
+import com.github.hanielcota.commandframework.annotation.DefaultCommand;
 import com.github.hanielcota.commandframework.annotation.SubCommand;
 import com.github.hanielcota.commandframework.cache.FrameworkCaches;
 import io.github.classgraph.ClassGraph;
@@ -12,11 +13,14 @@ import lombok.experimental.FieldDefaults;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class CommandScanner {
+
+    private static final Logger LOGGER = Logger.getLogger(CommandScanner.class.getSimpleName());
 
     public List<CommandDefinition> scan(String basePackage) {
         if (basePackage == null || basePackage.isBlank()) {
@@ -25,13 +29,17 @@ public class CommandScanner {
 
         try (ScanResult scanResult = new ClassGraph()
             .enableClassInfo()
+            .enableAnnotationInfo()
             .acceptPackages(basePackage)
             .scan()) {
 
             var classes = scanResult.getClassesWithAnnotation(Command.class.getName());
             if (classes.isEmpty()) {
+                LOGGER.warning("[CommandFramework] Nenhuma classe com @Command encontrada no pacote: " + basePackage);
                 return List.of();
             }
+
+            LOGGER.info("[CommandFramework] Encontradas " + classes.size() + " classes com @Command no pacote: " + basePackage);
 
             return classes.stream()
                 .map(info -> toDefinition(info.loadClass()))
@@ -73,9 +81,8 @@ public class CommandScanner {
         }
 
         return java.util.Arrays.stream(methods)
-            .filter(method -> method.isAnnotationPresent(SubCommand.class))
+            .filter(method -> method.isAnnotationPresent(SubCommand.class) || method.isAnnotationPresent(DefaultCommand.class))
+            .peek(method -> method.setAccessible(true))
             .collect(Collectors.toList());
     }
 }
-
-

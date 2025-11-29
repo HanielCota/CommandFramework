@@ -48,30 +48,18 @@ dependencies {
 ```java
 public class MeuPlugin extends JavaPlugin {
     
-    private CommandFramework framework;
-    private BukkitAudiences audiences;
+    private CommandFramework commandFramework;
     
     @Override
     public void onEnable() {
-        // Configurar Adventure API
-        audiences = BukkitAudiences.create(this);
-        var miniMessage = MiniMessage.miniMessage();
-        var messageProvider = new MiniMessageProvider(audiences, miniMessage);
-        
-        // Criar cache de handlers
-        Cache<Class<?>, Object> handlerCache = FrameworkCaches.handlerInstances();
-        
-        // Criar framework
-        framework = CommandFramework.create(this, messageProvider, handlerCache);
-        
-        // Registrar comandos do pacote
-        framework.registerPackage("com.seuprojeto.meuplugin.commands");
+        commandFramework = new CommandFramework(this);
+        commandFramework.setup("com.seuprojeto.meuplugin.commands");
     }
     
     @Override
     public void onDisable() {
-        if (audiences != null) {
-            audiences.close();
+        if (commandFramework != null) {
+            commandFramework.close();
         }
     }
 }
@@ -339,14 +327,6 @@ Sem a flag, comandos vanilla continuam funcionando normalmente.
 - **Async por padrão**: Scan e processamento assíncronos
 - **Early-return**: Reduz branching desnecessário
 
-## 📖 Exemplos Completos
-
-Veja a pasta `src/main/java/com/seuprojeto/framework/example/` para exemplos de:
-
-- ✅ Comando simples (`/gm`)
-- ✅ Override seguro de comando vanilla (`/gamemode`)
-- ✅ Subcomandos de dois níveis (`/admin player set`)
-- ✅ Comandos assíncronos com `CompletionStage`
 - ✅ Parser customizado
 - ✅ Sugestões dinâmicas com `SuggestionProvider`
 

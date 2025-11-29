@@ -9,22 +9,24 @@ import java.util.List;
 
 public final class FrameworkCaches {
 
+    private static final Cache<Class<?>, List<Method>> COMMAND_METHODS = Caffeine.newBuilder()
+        .expireAfterAccess(Duration.ofMinutes(10))
+        .maximumSize(256)
+        .build();
+
+    private static final Cache<Class<?>, Object> HANDLER_INSTANCES = Caffeine.newBuilder()
+        .expireAfterAccess(Duration.ofMinutes(10))
+        .maximumSize(256)
+        .build();
+
     private FrameworkCaches() {
     }
 
     public static Cache<Class<?>, List<Method>> commandMethods() {
-        return Caffeine.newBuilder()
-            .expireAfterAccess(Duration.ofMinutes(10))
-            .maximumSize(256)
-            .build();
+        return COMMAND_METHODS;
     }
 
     public static Cache<Class<?>, Object> handlerInstances() {
-        return Caffeine.newBuilder()
-            .expireAfterAccess(Duration.ofMinutes(10))
-            .maximumSize(256)
-            .build();
+        return HANDLER_INSTANCES;
     }
 }
-
-
