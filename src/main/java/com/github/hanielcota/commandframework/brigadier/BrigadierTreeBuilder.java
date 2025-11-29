@@ -46,19 +46,13 @@ public class BrigadierTreeBuilder {
      * @param metadata   Metadados do comando a ser construído
      */
     public void buildAndRegister(CommandDispatcher<CommandSender> dispatcher, CommandMetadata metadata) {
-        if (dispatcher == null) {
+        if (dispatcher == null || metadata == null) {
             return;
         }
-
-        if (metadata == null) {
-            return;
-        }
-
         var root = buildRoot(metadata);
         if (root == null) {
             return;
         }
-
         dispatcher.register(root);
     }
 
@@ -288,12 +282,10 @@ public class BrigadierTreeBuilder {
         if (parameter == null) {
             return "arg";
         }
-
         var name = parameter.getName();
         if (name == null || name.isBlank()) {
             return "arg";
         }
-
         return name;
     }
 
@@ -345,30 +337,23 @@ public class BrigadierTreeBuilder {
         if (method == null) {
             return null;
         }
-
-        // Primeiro tenta o método
         var methodCooldown = method.getAnnotation(Cooldown.class);
         if (methodCooldown != null) {
             return methodCooldown;
         }
-
-        // Depois tenta a classe
-        if (type != null) {
-            return type.getAnnotation(Cooldown.class);
+        if (type == null) {
+            return null;
         }
-
-        return null;
+        return type.getAnnotation(Cooldown.class);
     }
 
     private boolean hasPermission(CommandSender sender, String permission) {
         if (sender == null) {
             return false;
         }
-
         if (permission == null || permission.isBlank()) {
             return true;
         }
-
         return sender.hasPermission(permission);
     }
 

@@ -26,14 +26,9 @@ public class StringArgumentParser implements ArgumentParser<String> {
 
     @Override
     public Optional<String> parse(CommandContext<CommandSender> context, String name) {
-        if (context == null) {
+        if (context == null || name == null) {
             return Optional.empty();
         }
-
-        if (name == null) {
-            return Optional.empty();
-        }
-
         return Optional.of(StringArgumentType.getString(context, name));
     }
 }

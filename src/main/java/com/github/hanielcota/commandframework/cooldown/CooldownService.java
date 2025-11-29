@@ -50,19 +50,16 @@ public class CooldownService {
         if (key == null) {
             return false;
         }
-
         var now = System.nanoTime();
         var expiresAt = Optional.ofNullable(cache.getIfPresent(key));
         if (expiresAt.isEmpty()) {
             return false;
         }
-
         var remaining = expiresAt.get() - now;
         if (remaining <= 0L) {
             cache.invalidate(key);
             return false;
         }
-
         return true;
     }
 
@@ -70,36 +67,26 @@ public class CooldownService {
         if (key == null) {
             return Optional.empty();
         }
-
         var now = System.nanoTime();
         var expiresAt = Optional.ofNullable(cache.getIfPresent(key));
         if (expiresAt.isEmpty()) {
             return Optional.empty();
         }
-
         var remainingNanos = expiresAt.get() - now;
         if (remainingNanos <= 0L) {
             cache.invalidate(key);
             return Optional.empty();
         }
-
         return Optional.of(Duration.ofNanos(remainingNanos));
     }
 
     public void putOnCooldown(CooldownKey key, Duration duration) {
-        if (key == null) {
+        if (key == null || duration == null) {
             return;
         }
-
-        if (duration == null) {
-            return;
-        }
-
-        // Limita a duração ao máximo permitido
         var effectiveDuration = duration.compareTo(maxCooldownDuration) > 0 
             ? maxCooldownDuration 
             : duration;
-
         var now = System.nanoTime();
         var nanos = effectiveDuration.toNanos();
         var expiresAt = now + nanos;

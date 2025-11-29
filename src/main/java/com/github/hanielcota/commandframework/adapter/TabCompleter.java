@@ -81,11 +81,11 @@ public class TabCompleter {
     }
 
     private Method resolveTargetMethod(SubCommandFinder.SubCommandMatch match, Map<String, Method> subCommands, Method defaultMethod) {
-        if (match != null) {
-            var path = match.path().toLowerCase();
-            return subCommands.get(path);
+        if (match == null) {
+            return defaultMethod;
         }
-        return defaultMethod;
+        var path = match.path().toLowerCase();
+        return subCommands.get(path);
     }
 
     private ParameterIndex calculateParamIndex(SubCommandFinder.SubCommandMatch match, String[] args, Method targetMethod) {
@@ -109,15 +109,17 @@ public class TabCompleter {
 
     private boolean tryMethodTabCompletion(TabCompletion annotation, ParameterIndex paramIndex, Method method, String input, TabCompletions completions) {
         var staticSuggestions = annotation.value();
-        if (staticSuggestions.length > 0) {
-            if (paramIndex.value() == 0 || method.getParameterCount() == 0) {
-                addStaticSuggestions(staticSuggestions, input, completions);
-                if (!completions.isEmpty()) {
-                    return true;
-                }
-            }
+        if (staticSuggestions.length == 0) {
+            return tryProviderCompletions(annotation.provider(), input, completions);
         }
-        return tryProviderCompletions(annotation.provider(), input, completions);
+        if (paramIndex.value() != 0 && method.getParameterCount() != 0) {
+            return tryProviderCompletions(annotation.provider(), input, completions);
+        }
+        addStaticSuggestions(staticSuggestions, input, completions);
+        if (completions.isEmpty()) {
+            return tryProviderCompletions(annotation.provider(), input, completions);
+        }
+        return true;
     }
 
     private void addStaticSuggestions(String[] suggestions, String input, TabCompletions completions) {

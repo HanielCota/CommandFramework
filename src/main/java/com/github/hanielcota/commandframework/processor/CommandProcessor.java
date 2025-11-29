@@ -69,12 +69,10 @@ public class CommandProcessor {
         if (definition == null) {
             return null;
         }
-
         var instance = createInstance(definition.getType());
         if (instance == null) {
             return null;
         }
-
         return CommandMetadata.builder()
             .commandAnnotation(definition.getAnnotation())
             .type(definition.getType())
@@ -119,27 +117,21 @@ public class CommandProcessor {
         if (type == null) {
             return null;
         }
-
         if (type.equals(Plugin.class)) {
             return plugin;
         }
-
         if (type.equals(ArgumentParserRegistry.class)) {
             return parserRegistry;
         }
-
         if (type.equals(CommandExecutor.class)) {
             return executor;
         }
-
         if (type.equals(CooldownService.class)) {
             return cooldownService;
         }
-
         if (type.equals(GlobalErrorHandler.class)) {
             return errorHandler;
         }
-
         return null;
     }
 
@@ -194,14 +186,12 @@ public class CommandProcessor {
         if (instance == null) {
             return null;
         }
-
         var type = instance.getClass();
         var annotation = type.getAnnotation(Command.class);
         if (annotation == null) {
             LOGGER.warning("[CommandFramework] Classe " + type.getName() + " não possui anotação @Command");
             return null;
         }
-
         var methods = findHandlerMethods(type);
         return CommandDefinition.builder()
             .annotation(annotation)
@@ -230,7 +220,6 @@ public class CommandProcessor {
         if (definition == null || instance == null) {
             return null;
         }
-
         return CommandMetadata.builder()
             .commandAnnotation(definition.getAnnotation())
             .type(definition.getType())

@@ -64,19 +64,13 @@ public class GlobalErrorHandler {
     }
 
     public void handleCooldown(CommandSender sender, java.time.Duration remaining) {
-        if (sender == null) {
+        if (sender == null || remaining == null) {
             return;
         }
-
-        if (remaining == null) {
-            return;
-        }
-
         var message = messageProvider.cooldown(sender, remaining);
         if (message.isEmpty()) {
             return;
         }
-
         sender.sendMessage(message.get());
     }
 }

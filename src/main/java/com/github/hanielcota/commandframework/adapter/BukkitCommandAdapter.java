@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
@@ -291,6 +292,22 @@ public class BukkitCommandAdapter {
                         continue;
                     }
 
+                    if (type.equals(OfflinePlayer.class)) {
+                        if (argIndex >= args.length) {
+                            invokeArgs[i] = null;
+                            continue;
+                        }
+                        String targetName = args[argIndex++];
+                        OfflinePlayer resolved = resolveOfflinePlayer(targetName);
+                        if (resolved == null) {
+                            errorHandler.handleTargetOffline(sender, targetName)
+                                .ifPresent(sender::sendMessage);
+                            return;
+                        }
+                        invokeArgs[i] = resolved;
+                        continue;
+                    }
+
                     if (type.equals(String[].class)) {
                         invokeArgs[i] = args;
                         continue;
@@ -324,17 +341,26 @@ public class BukkitCommandAdapter {
 
                 var result = method.invoke(metadata.getInstance(), invokeArgs);
 
-                // Trata o resultado
                 if (result instanceof Component component) {
                     sender.sendMessage(component);
                     return;
                 }
-
                 if (result instanceof String string) {
                     sender.sendMessage(Component.text(string));
                 }
 
             } catch (Exception e) {
+                // Verifica se é uma exceção relacionada a jogador inválido
+                if (isPlayerNotFoundException(e)) {
+                    // Tenta extrair o nome do jogador da mensagem de erro ou dos argumentos
+                    String playerName = extractPlayerNameFromException(e, args);
+                    if (playerName != null && !playerName.isEmpty()) {
+                        errorHandler.handleTargetOffline(sender, playerName)
+                            .ifPresent(sender::sendMessage);
+                        return;
+                    }
+                }
+                
                 LOGGER.severe("[CommandFramework] Erro ao executar comando: " + e.getMessage());
                 e.printStackTrace();
                 errorHandler.handleInternalError(sender, e).ifPresent(sender::sendMessage);
@@ -345,47 +371,98 @@ public class BukkitCommandAdapter {
             if (index == 0) {
                 return true;
             }
-            return index == 1 && parameters[0].getType().equals(CommandSender.class);
+            if (index != 1) {
+                return false;
+            }
+            return parameters[0].getType().equals(CommandSender.class);
         }
 
         private Player resolvePlayerParameter(CommandSender sender, java.lang.reflect.Parameter[] parameters, String[] args, int index, int argIndex) {
-            // Primeiro parâmetro Player = sender
-            if (isFirstPlayerParameter(parameters, index)) {
-                if (sender instanceof Player p) {
-                    return p;
+            if (!isFirstPlayerParameter(parameters, index)) {
+                if (argIndex >= args.length) {
+                    return null;
                 }
+                return Bukkit.getPlayer(args[argIndex]);
+            }
+            
+            if (sender instanceof Player p) {
+                return p;
+            }
+            return null;
+        }
+
+        /**
+         * Resolve um OfflinePlayer de forma segura, sem fazer chamadas HTTP desnecessárias.
+         * Primeiro verifica se o jogador está online, depois verifica no cache do servidor.
+         * Só retorna null se o jogador nunca jogou no servidor.
+         */
+        private OfflinePlayer resolveOfflinePlayer(String name) {
+            if (name == null || name.isEmpty()) {
                 return null;
             }
 
-            // Parâmetro Player posterior = parse do nome
-            if (argIndex >= args.length) {
+            // Primeiro tenta encontrar um jogador online (mais rápido)
+            Player onlinePlayer = Bukkit.getPlayer(name);
+            if (onlinePlayer != null) {
+                return onlinePlayer;
+            }
+
+            // Verifica se o nome é válido (evita chamadas HTTP para nomes inválidos)
+            // Nomes de jogadores do Minecraft: 3-16 caracteres, alfanumérico + underscore
+            if (!isValidMinecraftUsername(name)) {
                 return null;
             }
 
-            return Bukkit.getPlayer(args[argIndex]);
+            // Usa getOfflinePlayerIfCached para evitar chamadas HTTP
+            // Este método retorna null se o jogador nunca esteve no servidor
+            OfflinePlayer cached = Bukkit.getOfflinePlayerIfCached(name);
+            if (cached != null) {
+                return cached;
+            }
+
+            // Se não está no cache, o jogador nunca jogou neste servidor
+            // Não chamamos getOfflinePlayer() para evitar chamadas HTTP
+            return null;
+        }
+
+        /**
+         * Valida se um nome é um username válido do Minecraft.
+         * Usernames devem ter 3-16 caracteres e conter apenas letras, números e underscores.
+         */
+        private boolean isValidMinecraftUsername(String name) {
+            if (name == null || name.length() < 3 || name.length() > 16) {
+                return false;
+            }
+            for (int i = 0; i < name.length(); i++) {
+                char c = name.charAt(i);
+                if (!Character.isLetterOrDigit(c) && c != '_') {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private Object parseInteger(String[] args, int argIndex, boolean isPrimitive) {
+            var defaultValue = isPrimitive ? 0 : null;
             if (argIndex >= args.length) {
-                return isPrimitive ? 0 : null;
+                return defaultValue;
             }
-
             try {
                 return Integer.parseInt(args[argIndex]);
             } catch (NumberFormatException e) {
-                return isPrimitive ? 0 : null;
+                return defaultValue;
             }
         }
 
         private Object parseDouble(String[] args, int argIndex, boolean isPrimitive) {
+            var defaultValue = isPrimitive ? 0.0 : null;
             if (argIndex >= args.length) {
-                return isPrimitive ? 0.0 : null;
+                return defaultValue;
             }
-
             try {
                 return Double.parseDouble(args[argIndex]);
             } catch (NumberFormatException e) {
-                return isPrimitive ? 0.0 : null;
+                return defaultValue;
             }
         }
 
@@ -393,8 +470,66 @@ public class BukkitCommandAdapter {
             if (argIndex >= args.length) {
                 return isPrimitive ? false : null;
             }
-
             return Boolean.parseBoolean(args[argIndex]);
+        }
+
+        private boolean isPlayerNotFoundException(Throwable e) {
+            if (e == null) {
+                return false;
+            }
+            
+            String exceptionName = e.getClass().getName();
+            if (exceptionName.contains("MinecraftClientHttpException") ||
+                exceptionName.contains("authlib") ||
+                exceptionName.contains("GameProfile")) {
+                return true;
+            }
+            
+            String message = e.getMessage();
+            if (message != null) {
+                String lowerMessage = message.toLowerCase();
+                if (lowerMessage.contains("couldn't find") && 
+                    (lowerMessage.contains("profile") || lowerMessage.contains("player"))) {
+                    return true;
+                }
+            }
+            
+            Throwable cause = e.getCause();
+            if (cause == null || cause == e) {
+                return false;
+            }
+            return isPlayerNotFoundException(cause);
+        }
+
+        private String extractPlayerNameFromException(Throwable e, String[] args) {
+            if (e == null || args == null || args.length == 0) {
+                return null;
+            }
+            
+            String message = e.getMessage();
+            if (message == null) {
+                return args.length > 0 && !args[0].isEmpty() ? args[0] : null;
+            }
+            
+            int nameIndex = message.indexOf("name: ");
+            if (nameIndex < 0) {
+                return args.length > 0 && !args[0].isEmpty() ? args[0] : null;
+            }
+            
+            String namePart = message.substring(nameIndex + 6).trim();
+            int endIndex = namePart.indexOf('\n');
+            if (endIndex > 0) {
+                namePart = namePart.substring(0, endIndex);
+            }
+            endIndex = namePart.indexOf('\r');
+            if (endIndex > 0) {
+                namePart = namePart.substring(0, endIndex);
+            }
+            if (!namePart.isEmpty()) {
+                return namePart.trim();
+            }
+            
+            return args.length > 0 && !args[0].isEmpty() ? args[0] : null;
         }
 
         @Override
@@ -405,53 +540,49 @@ public class BukkitCommandAdapter {
                 return completions;
             }
 
-            // Se não há argumentos ou o primeiro argumento está vazio
             if (args.length == 0 || (args.length == 1 && args[0].isEmpty())) {
-                // Usa cache de parts para evitar split repetido
                 for (var parts : subCommandPartsCache.values()) {
                     if (parts.length > 0) {
                         completions.add(parts[0]);
                     }
                 }
+                if (defaultMethod != null) {
+                    var methodCompletions = getTabCompletionsForMethod(defaultMethod, 0, "");
+                    completions.addAll(methodCompletions);
+                }
                 return completions;
             }
 
-            // Se há apenas 1 argumento, sugere subcomandos ou parâmetros do default
             if (args.length == 1) {
                 var input = args[0].toLowerCase();
                 
-                // Primeiro, tenta subcomandos (usa cache de parts)
                 for (var parts : subCommandPartsCache.values()) {
                     if (parts.length > 0 && parts[0].startsWith(input)) {
                         completions.add(parts[0]);
                     }
                 }
                 
-                // Se não encontrou subcomandos e há método default, sugere parâmetros do default
-                if (completions.isEmpty() && defaultMethod != null) {
-                    completions.addAll(getTabCompletionsForMethod(defaultMethod, 0, input));
+                if (defaultMethod != null) {
+                    var methodCompletions = getTabCompletionsForMethod(defaultMethod, 0, input);
+                    completions.addAll(methodCompletions);
                 }
                 
                 return completions;
             }
 
-            // Para 2+ argumentos, determina qual método será executado
             Method targetMethod = null;
             int paramIndex = 0;
             String input = args[args.length - 1].toLowerCase();
 
-            // Tenta encontrar subcomando
             var subCommandPath = findSubCommandPath(args);
             if (subCommandPath != null) {
                 targetMethod = subCommands.get(subCommandPath.path.toLowerCase());
                 if (targetMethod != null) {
-                    // Calcula qual parâmetro está sendo completado
                     paramIndex = subCommandPath.remainingArgs.length - 1;
                 }
             }
 
             if (targetMethod == null && defaultMethod != null) {
-                // Usa o método default
                 targetMethod = defaultMethod;
                 paramIndex = args.length - 1;
             }
@@ -471,27 +602,62 @@ public class BukkitCommandAdapter {
                 return completions;
             }
 
-            // Primeiro, verifica se o método tem @TabCompletion
-            // Isso se aplica quando o primeiro argumento está sendo completado
+            var parameters = method.getParameters();
+            boolean hasStringArrayParam = parameters.length > 0 && 
+                parameters[parameters.length - 1].getType().equals(String[].class);
+            
+            int commandArgCount = 0;
+            for (var param : parameters) {
+                var type = param.getType();
+                if (!type.equals(CommandSender.class) && 
+                    !type.equals(Player.class) && 
+                    !type.equals(String[].class)) {
+                    commandArgCount++;
+                }
+            }
+            
+            if (hasStringArrayParam) {
+                return getStringArrayCompletions(method, paramIndex, input, completions, commandArgCount);
+            }
+            
+            if (hasStringArrayParam && paramIndex >= commandArgCount) {
+                return completions;
+            }
+
+            var methodTabCompletion = method.getAnnotation(TabCompletion.class);
+            if (methodTabCompletion != null) {
+                var result = tryMethodTabCompletion(methodTabCompletion, paramIndex, method, input, completions);
+                if (!result.isEmpty()) {
+                    return result;
+                }
+            }
+
+            if (paramIndex < 0 || paramIndex >= parameters.length) {
+                return completions;
+            }
+
+            var parameter = parameters[paramIndex];
+            return getParameterCompletions(parameter, methodTabCompletion, input, completions);
+        }
+        
+        private List<String> getStringArrayCompletions(Method method, int paramIndex, String input, ArrayList<String> completions, int commandArgCount) {
+            int argIndex = paramIndex;
+            
             var methodTabCompletion = method.getAnnotation(TabCompletion.class);
             if (methodTabCompletion != null) {
                 String[] staticSuggestions = methodTabCompletion.value();
-                if (staticSuggestions.length > 0) {
-                    // Se o método tem @TabCompletion, aplica ao primeiro argumento
-                    // (paramIndex 0 ou quando não há parâmetros específicos)
-                    if (paramIndex == 0 || method.getParameterCount() == 0) {
-                        for (String suggestion : staticSuggestions) {
-                            if (suggestion.toLowerCase().startsWith(input)) {
-                                completions.add(suggestion);
-                            }
-                        }
-                        if (!completions.isEmpty()) {
-                            return completions;
-                        }
+                if (staticSuggestions.length > 0 && argIndex == 0) {
+                    addSuggestionsWithPlayersSupport(staticSuggestions, input, completions);
+                    return completions;
+                }
+                
+                if (staticSuggestions.length > 0 && argIndex == 1) {
+                    if (hasPlayersSuggestion(staticSuggestions)) {
+                        addPlayerCompletions(input, completions);
+                        return completions;
                     }
                 }
                 
-                // Tenta usar provider dinâmico do método
                 var providerClass = methodTabCompletion.provider();
                 if (providerClass != null && providerClass != TabCompletion.NoProvider.class) {
                     var providerCompletions = getProviderCompletions(providerClass, input);
@@ -500,42 +666,49 @@ public class BukkitCommandAdapter {
                     }
                 }
             }
-
-            var parameters = method.getParameters();
-            if (paramIndex < 0 || paramIndex >= parameters.length) {
+            
+            if (argIndex == 1 && completions.isEmpty()) {
+                addPlayerCompletions(input, completions);
                 return completions;
             }
-
-            var parameter = parameters[paramIndex];
             
-            // Se o parâmetro é String[], usa as sugestões do método se disponíveis
+            return completions;
+        }
+        
+        private List<String> tryMethodTabCompletion(TabCompletion methodTabCompletion, int paramIndex, Method method, String input, ArrayList<String> completions) {
+            String[] staticSuggestions = methodTabCompletion.value();
+            if (staticSuggestions.length > 0 && (paramIndex == 0 || method.getParameterCount() == 0)) {
+                addSuggestionsWithPlayersSupport(staticSuggestions, input, completions);
+                return completions;
+            }
+            
+            var providerClass = methodTabCompletion.provider();
+            if (providerClass != null && providerClass != TabCompletion.NoProvider.class) {
+                var providerCompletions = getProviderCompletions(providerClass, input);
+                if (!providerCompletions.isEmpty()) {
+                    return providerCompletions;
+                }
+            }
+            return new ArrayList<>();
+        }
+        
+        private List<String> getParameterCompletions(java.lang.reflect.Parameter parameter, TabCompletion methodTabCompletion, String input, ArrayList<String> completions) {
             if (parameter.getType().equals(String[].class) && methodTabCompletion != null) {
                 String[] staticSuggestions = methodTabCompletion.value();
                 if (staticSuggestions.length > 0) {
-                    for (String suggestion : staticSuggestions) {
-                        if (suggestion.toLowerCase().startsWith(input)) {
-                            completions.add(suggestion);
-                        }
-                    }
+                    addSuggestionsWithPlayersSupport(staticSuggestions, input, completions);
                     return completions;
                 }
             }
 
             var tabCompletion = parameter.getAnnotation(TabCompletion.class);
-            
             if (tabCompletion != null) {
-                // Prioriza sugestões estáticas do parâmetro
                 String[] staticSuggestions = tabCompletion.value();
                 if (staticSuggestions.length > 0) {
-                    for (String suggestion : staticSuggestions) {
-                        if (suggestion.toLowerCase().startsWith(input)) {
-                            completions.add(suggestion);
-                        }
-                    }
+                    addSuggestionsWithPlayersSupport(staticSuggestions, input, completions);
                     return completions;
                 }
 
-                // Se não há sugestões estáticas, tenta usar o provider
                 var providerClass = tabCompletion.provider();
                 if (providerClass != null && providerClass != TabCompletion.NoProvider.class) {
                     var providerCompletions = getProviderCompletions(providerClass, input);
@@ -545,57 +718,79 @@ public class BukkitCommandAdapter {
                 }
             }
 
-            // Sugestões padrão baseadas no tipo
             var type = parameter.getType();
             if (type.equals(Player.class)) {
-                // Sugere jogadores online (limita a 50 para performance)
-                Collection<? extends Player> players = Bukkit.getOnlinePlayers();
-                int count = 0;
-                for (Player player : players) {
-                    if (count >= 50) break; // Limita sugestões para performance
-                    var name = player.getName();
-                    if (name.toLowerCase().startsWith(input)) {
-                        completions.add(name);
-                        count++;
-                    }
-                }
+                addPlayerCompletions(input, completions);
                 return completions;
             }
 
             if (type.equals(Boolean.class) || type.equals(boolean.class)) {
-                // Sugere true/false para booleanos
                 if ("true".startsWith(input)) completions.add("true");
                 if ("false".startsWith(input)) completions.add("false");
             }
 
             return completions;
         }
+        
+        private void addSuggestionsWithPlayersSupport(String[] suggestions, String input, ArrayList<String> completions) {
+            for (String suggestion : suggestions) {
+                if (suggestion.equals("@players")) {
+                    addPlayerCompletions(input, completions);
+                    continue;
+                }
+                if (input.isEmpty() || suggestion.toLowerCase().startsWith(input)) {
+                    completions.add(suggestion);
+                }
+            }
+        }
+        
+        private boolean hasPlayersSuggestion(String[] suggestions) {
+            for (String suggestion : suggestions) {
+                if (suggestion.equals("@players")) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        private void addPlayerCompletions(String input, ArrayList<String> completions) {
+            Collection<? extends Player> players = Bukkit.getOnlinePlayers();
+            int count = 0;
+            for (Player player : players) {
+                if (count >= 50) break;
+                var name = player.getName();
+                if (input.isEmpty() || name.toLowerCase().startsWith(input)) {
+                    completions.add(name);
+                    count++;
+                }
+            }
+        }
 
         private List<String> getProviderCompletions(Class<?> providerClass, String input) {
             var completions = new ArrayList<String>();
             try {
-                // Cache de providers poderia ser adicionado aqui se necessário
                 var provider = providerClass.getDeclaredConstructor().newInstance();
-                // Se o provider tem um método getSuggestions ou similar
                 var methods = providerClass.getDeclaredMethods();
                 for (var method : methods) {
                     var methodName = method.getName();
-                    if (methodName.equals("getSuggestions") || methodName.equals("complete")) {
-                        method.setAccessible(true);
-                        var result = method.invoke(provider);
-                        if (result instanceof List<?> list) {
-                            int count = 0;
-                            for (var item : list) {
-                                if (count >= 50) break; // Limita sugestões para performance
-                                var str = item.toString();
-                                if (str.toLowerCase().startsWith(input)) {
-                                    completions.add(str);
-                                    count++;
-                                }
-                            }
-                        }
+                    if (!methodName.equals("getSuggestions") && !methodName.equals("complete")) {
+                        continue;
+                    }
+                    method.setAccessible(true);
+                    var result = method.invoke(provider);
+                    if (!(result instanceof List<?> list)) {
                         break;
                     }
+                    int count = 0;
+                    for (var item : list) {
+                        if (count >= 50) break;
+                        var str = item.toString();
+                        if (str.toLowerCase().startsWith(input)) {
+                            completions.add(str);
+                            count++;
+                        }
+                    }
+                    break;
                 }
             } catch (Exception e) {
                 LOGGER.warning("[CommandFramework] Erro ao obter sugestões do provider: " + e.getMessage());

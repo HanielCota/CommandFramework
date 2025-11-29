@@ -27,19 +27,13 @@ public class UUIDArgumentParser implements ArgumentParser<UUID> {
 
     @Override
     public Optional<UUID> parse(CommandContext<CommandSender> context, String name) {
-        if (context == null) {
+        if (context == null || name == null) {
             return Optional.empty();
         }
-
-        if (name == null) {
-            return Optional.empty();
-        }
-
         var input = StringArgumentType.getString(context, name);
         if (input == null || input.isBlank()) {
             return Optional.empty();
         }
-
         try {
             var uuid = UUID.fromString(input);
             return Optional.of(uuid);

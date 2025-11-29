@@ -56,10 +56,7 @@ public class CooldownChecker {
     }
 
     private Cooldown resolveCooldown(Cooldown methodCooldown, Cooldown classCooldown) {
-        if (methodCooldown != null) {
-            return methodCooldown;
-        }
-        return classCooldown;
+        return methodCooldown != null ? methodCooldown : classCooldown;
     }
 
     private CooldownKey createCooldownKey(CommandSender sender, String commandName, String methodName) {

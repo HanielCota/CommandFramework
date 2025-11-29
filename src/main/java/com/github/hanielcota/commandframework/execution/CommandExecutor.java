@@ -28,17 +28,14 @@ public class CommandExecutor {
         if (context == null) {
             return;
         }
-
         var method = context.getHandlerMethod();
         if (method == null) {
             return;
         }
-
         if (method.isAnnotationPresent(Async.class)) {
             runAsync(context);
             return;
         }
-
         runSync(context);
     }
 
@@ -99,54 +96,38 @@ public class CommandExecutor {
         if (value == null) {
             return;
         }
-
         if (value instanceof CommandResult.Success success) {
             send(sender, success.message());
             return;
         }
-
         if (value instanceof CommandResult.Failure failure) {
             send(sender, failure.message());
             return;
         }
-
         if (value instanceof CommandResult.NoOp) {
             return;
         }
-
         if (value instanceof Component component) {
             send(sender, component);
             return;
         }
-
         if (value instanceof String string) {
             send(sender, Component.text(string));
-            return;
         }
     }
 
     private void sendError(CommandSender sender, Throwable throwable) {
-        if (sender == null) {
+        if (sender == null || throwable == null) {
             return;
         }
-
-        if (throwable == null) {
-            return;
-        }
-
         var message = Component.text("Ocorreu um erro ao executar o comando.");
         send(sender, message);
     }
 
     private void send(CommandSender sender, Component component) {
-        if (sender == null) {
+        if (sender == null || component == null) {
             return;
         }
-
-        if (component == null) {
-            return;
-        }
-
         sender.sendMessage(component);
     }
 
@@ -203,12 +184,10 @@ public class CommandExecutor {
             if (parameter == null) {
                 return "arg";
             }
-
             var name = parameter.getName();
             if (name == null || name.isBlank()) {
                 return "arg";
             }
-
             return name;
         }
     }

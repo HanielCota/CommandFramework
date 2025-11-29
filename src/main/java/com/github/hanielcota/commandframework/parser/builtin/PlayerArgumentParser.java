@@ -28,19 +28,13 @@ public class PlayerArgumentParser implements ArgumentParser<Player> {
 
     @Override
     public Optional<Player> parse(CommandContext<CommandSender> context, String name) {
-        if (context == null) {
+        if (context == null || name == null) {
             return Optional.empty();
         }
-
-        if (name == null) {
-            return Optional.empty();
-        }
-
         var input = StringArgumentType.getString(context, name);
         if (input == null || input.isBlank()) {
             return Optional.empty();
         }
-
         var player = Bukkit.getPlayer(input);
         return Optional.ofNullable(player);
     }

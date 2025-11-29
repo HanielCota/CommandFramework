@@ -80,11 +80,11 @@ public class CommandFramework {
         if (definitions.isEmpty()) {
             return;
         }
-        if (!Bukkit.isPrimaryThread()) {
-            scheduleSyncProcessAndRegister(definitions);
+        if (Bukkit.isPrimaryThread()) {
+            configuration.getProcessor().processAndRegister(definitions);
             return;
         }
-        configuration.getProcessor().processAndRegister(definitions);
+        scheduleSyncProcessAndRegister(definitions);
     }
 
     private void scheduleSyncProcessAndRegister(java.util.List<com.github.hanielcota.commandframework.registry.CommandDefinition> definitions) {
@@ -127,11 +127,11 @@ public class CommandFramework {
             return;
         }
         ensureInitialized();
-        if (Bukkit.isPrimaryThread()) {
-            registerSync(instance);
+        if (!Bukkit.isPrimaryThread()) {
+            scheduleSyncRegister(instance);
             return;
         }
-        scheduleSyncRegister(instance);
+        registerSync(instance);
     }
 
     private void registerSync(Object instance) {
@@ -157,11 +157,11 @@ public class CommandFramework {
             return;
         }
         ensureInitialized();
-        if (Bukkit.isPrimaryThread()) {
-            registerSync(commandClass);
+        if (!Bukkit.isPrimaryThread()) {
+            scheduleSyncRegister(commandClass);
             return;
         }
-        scheduleSyncRegister(commandClass);
+        registerSync(commandClass);
     }
 
     private void registerSync(Class<?> commandClass) {

@@ -23,7 +23,6 @@ public class MiniMessageProvider implements MessageProvider {
         if (permission == null) {
             return Optional.empty();
         }
-
         var template = "<red>Você não tem permissão para este comando. <gray>({permission})";
         return Optional.of(parse(template.replace("{permission}", permission)));
     }
@@ -33,7 +32,6 @@ public class MiniMessageProvider implements MessageProvider {
         if (usage == null) {
             return Optional.empty();
         }
-
         var template = "<red>Uso inválido. <gray>{usage}";
         return Optional.of(parse(template.replace("{usage}", usage)));
     }
@@ -43,7 +41,6 @@ public class MiniMessageProvider implements MessageProvider {
         if (targetName == null) {
             return Optional.empty();
         }
-
         var template = "<red>Jogador {name} está offline.";
         return Optional.of(parse(template.replace("{name}", targetName)));
     }
@@ -53,7 +50,6 @@ public class MiniMessageProvider implements MessageProvider {
         if (label == null) {
             return Optional.empty();
         }
-
         var template = "<red>Subcomando {label} não encontrado.";
         return Optional.of(parse(template.replace("{label}", label)));
     }
@@ -63,7 +59,6 @@ public class MiniMessageProvider implements MessageProvider {
         if (error == null) {
             return Optional.empty();
         }
-
         var template = "<red>Ocorreu um erro interno ao executar o comando.";
         return Optional.of(parse(template));
     }
@@ -73,7 +68,6 @@ public class MiniMessageProvider implements MessageProvider {
         if (input == null) {
             return Optional.empty();
         }
-
         var template = "<red>Não foi possível interpretar \"{input}\".";
         return Optional.of(parse(template.replace("{input}", input)));
     }
@@ -83,7 +77,6 @@ public class MiniMessageProvider implements MessageProvider {
         if (remaining == null) {
             return Optional.empty();
         }
-
         var seconds = remaining.getSeconds();
         var template = "<red>Você precisa aguardar <white>{seconds}s</white> antes de usar este comando novamente.";
         return Optional.of(parse(template.replace("{seconds}", String.valueOf(seconds))));
@@ -91,22 +84,13 @@ public class MiniMessageProvider implements MessageProvider {
 
     @Override
     public Locale locale(CommandSender sender) {
-        if (sender == null) {
-            return Locale.getDefault();
-        }
-
         return Locale.getDefault();
     }
 
     public void send(CommandSender sender, Component component) {
-        if (sender == null) {
+        if (sender == null || component == null) {
             return;
         }
-
-        if (component == null) {
-            return;
-        }
-
         var audience = audiences.sender(sender);
         audience.sendMessage(component);
     }
@@ -115,7 +99,6 @@ public class MiniMessageProvider implements MessageProvider {
         if (template == null) {
             return Component.empty();
         }
-
         return miniMessage.deserialize(template);
     }
 }

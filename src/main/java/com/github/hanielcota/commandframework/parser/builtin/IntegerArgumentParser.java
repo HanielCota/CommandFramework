@@ -26,14 +26,9 @@ public class IntegerArgumentParser implements ArgumentParser<Integer> {
 
     @Override
     public Optional<Integer> parse(CommandContext<CommandSender> context, String name) {
-        if (context == null) {
+        if (context == null || name == null) {
             return Optional.empty();
         }
-
-        if (name == null) {
-            return Optional.empty();
-        }
-
         return Optional.of(IntegerArgumentType.getInteger(context, name));
     }
 }

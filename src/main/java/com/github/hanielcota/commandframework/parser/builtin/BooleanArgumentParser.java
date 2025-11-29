@@ -26,14 +26,9 @@ public class BooleanArgumentParser implements ArgumentParser<Boolean> {
 
     @Override
     public Optional<Boolean> parse(CommandContext<CommandSender> context, String name) {
-        if (context == null) {
+        if (context == null || name == null) {
             return Optional.empty();
         }
-
-        if (name == null) {
-            return Optional.empty();
-        }
-
         return Optional.of(BoolArgumentType.getBool(context, name));
     }
 }

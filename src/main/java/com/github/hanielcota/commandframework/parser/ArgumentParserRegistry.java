@@ -23,7 +23,6 @@ public class ArgumentParserRegistry {
         if (parser == null) {
             return;
         }
-
         parsers.put(parser.type(), parser);
     }
 
@@ -32,13 +31,11 @@ public class ArgumentParserRegistry {
         if (type == null) {
             return Optional.empty();
         }
-
         var parser = parsers.get(type);
-        if (parser != null) {
-            return Optional.of((ArgumentParser<T>) parser);
+        if (parser == null) {
+            return Optional.empty();
         }
-
-        return Optional.empty();
+        return Optional.of((ArgumentParser<T>) parser);
     }
 
     public boolean hasParser(Class<?> type) {

@@ -29,11 +29,9 @@ public class CommandInvocationContext {
         if (value == null) {
             return Optional.empty();
         }
-
         if (value instanceof CompletionStage<?> stage) {
             return Optional.of(stage);
         }
-
         return Optional.empty();
     }
 
@@ -41,15 +39,12 @@ public class CommandInvocationContext {
         if (value == null) {
             return Optional.empty();
         }
-
         if (value instanceof Component component) {
             return Optional.of(component);
         }
-
         if (value instanceof String string) {
             return Optional.of(Component.text(string));
         }
-
         return Optional.empty();
     }
 }
