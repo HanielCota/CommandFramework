@@ -59,24 +59,19 @@ public class CommandProcessor {
 
     public void processAndRegister(List<CommandDefinition> definitions) {
         if (definitions == null || definitions.isEmpty()) {
-            LOGGER.warning("[CommandFramework] Nenhuma definição de comando para processar");
             return;
         }
-
-        LOGGER.info("[CommandFramework] Processando " + definitions.size() + " comandos...");
 
         for (var definition : definitions) {
             var commandName = definition.getAnnotation().name().toLowerCase();
             
             // Verifica se o comando já foi registrado manualmente (tem prioridade)
             if (manuallyRegisteredCommands.contains(commandName)) {
-                LOGGER.info("[CommandFramework] Comando /" + commandName + " já foi registrado manualmente, ignorando scan automático");
                 continue;
             }
             
             // Verifica se o comando já foi registrado pelo scan
             if (registeredCommands.contains(commandName)) {
-                LOGGER.info("[CommandFramework] Comando /" + commandName + " já está registrado, ignorando duplicata");
                 continue;
             }
             
@@ -86,12 +81,9 @@ public class CommandProcessor {
                 continue;
             }
 
-            LOGGER.info("[CommandFramework] Registrando comando: " + commandName);
             adapter.register(metadata);
             registeredCommands.add(commandName);
         }
-
-        LOGGER.info("[CommandFramework] Comandos registrados com sucesso!");
     }
 
     private CommandMetadata toMetadata(CommandDefinition definition) {
@@ -188,18 +180,11 @@ public class CommandProcessor {
         // Marca como registrado manualmente (tem prioridade sobre scan automático)
         manuallyRegisteredCommands.add(commandName);
         
-        // Se já estava registrado pelo scan, vai sobrescrever
-        if (registeredCommands.contains(commandName)) {
-            LOGGER.info("[CommandFramework] Substituindo comando /" + commandName + " por instância com dependências");
-        }
-
         var metadata = toMetadata(definition, instance);
         if (metadata == null) {
             LOGGER.warning("[CommandFramework] Falha ao criar metadata para: " + instance.getClass().getName());
             return;
         }
-
-        LOGGER.info("[CommandFramework] Registrando comando manualmente: " + commandName);
         adapter.register(metadata);
         registeredCommands.add(commandName);
     }

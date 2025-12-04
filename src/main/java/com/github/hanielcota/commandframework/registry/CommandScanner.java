@@ -13,14 +13,11 @@ import lombok.experimental.FieldDefaults;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class CommandScanner {
-
-    private static final Logger LOGGER = Logger.getLogger(CommandScanner.class.getSimpleName());
 
     public List<CommandDefinition> scan(String basePackage) {
         if (basePackage == null || basePackage.isBlank()) {
@@ -35,11 +32,8 @@ public class CommandScanner {
 
             var classes = scanResult.getClassesWithAnnotation(Command.class.getName());
             if (classes.isEmpty()) {
-                LOGGER.warning("[CommandFramework] Nenhuma classe com @Command encontrada no pacote: " + basePackage);
                 return List.of();
             }
-
-            LOGGER.info("[CommandFramework] Encontradas " + classes.size() + " classes com @Command no pacote: " + basePackage);
 
             return classes.stream()
                 .map(info -> toDefinition(info.loadClass()))

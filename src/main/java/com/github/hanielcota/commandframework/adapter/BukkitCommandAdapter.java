@@ -69,7 +69,6 @@ public class BukkitCommandAdapter {
         }
 
         commandMap.register(plugin.getName().toLowerCase(), command);
-        LOGGER.info("[CommandFramework] Comando /" + name + " registrado com sucesso!");
     }
 
     private CommandMap getCommandMap() {
