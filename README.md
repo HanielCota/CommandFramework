@@ -26,6 +26,7 @@
   - [Anotações Disponíveis](#anotações-disponíveis)
   - [Parsers de Argumentos](#parsers-de-argumentos)
   - [Tab Completion](#tab-completion)
+  - [Injeção de Dependências](#injeção-de-dependências)
   - [Cooldown](#cooldown)
   - [Permissões](#permissões)
   - [Execução Assíncrona](#execução-assíncrona)
@@ -560,6 +561,149 @@ public Component setGamemode(CommandSender sender, GameMode mode) {
 }
 ```
 
+#### Providers com Dependências
+
+Providers de tab completion podem receber dependências através do construtor. Para isso, você precisa registrar as dependências no framework:
+
+```java
+// Provider que precisa de uma dependência
+@RequiredArgsConstructor
+public class WarpSuggestionProvider implements SuggestionProvider<CommandSender> {
+    
+    private final WarpManager warpManager;
+    
+    @Override
+    public CompletableFuture<Suggestions> getSuggestions(
+        CommandContext<CommandSender> context,
+        SuggestionsBuilder builder
+    ) {
+        String input = builder.getRemaining().toLowerCase();
+        
+        warpManager.getWarpsSorted().stream()
+            .map(Warp::name)
+            .filter(name -> name.toLowerCase().startsWith(input))
+            .forEach(builder::suggest);
+        
+        return builder.buildFuture();
+    }
+}
+```
+
+**Registrar a dependência:**
+
+```java
+@Override
+public void onEnable() {
+    commandFramework = new CommandFramework(this);
+    commandFramework.setup();
+    
+    // Criar e registrar dependências
+    WarpManager warpManager = new WarpManager();
+    commandFramework.registerDependency(WarpManager.class, warpManager);
+    
+    // Agora o WarpSuggestionProvider será criado automaticamente com o WarpManager
+}
+```
+
+**Usar o provider:**
+
+```java
+@Command(name = "warp")
+public class WarpCommand {
+    
+    @SubCommand("to")
+    public Component teleport(
+        CommandSender sender,
+        @TabCompletion(provider = WarpSuggestionProvider.class) String warpName
+    ) {
+        // ...
+    }
+}
+```
+
+### Injeção de Dependências
+
+O framework possui um sistema de injeção de dependências que funciona tanto para comandos quanto para providers de tab completion.
+
+#### Dependências do Framework
+
+O framework resolve automaticamente as seguintes dependências:
+
+- `Plugin` - Instância do seu plugin
+- `ArgumentParserRegistry` - Registry de parsers
+- `CommandExecutor` - Executor de comandos
+- `CooldownService` - Serviço de cooldown
+- `GlobalErrorHandler` - Handler de erros global
+
+#### Dependências Customizadas
+
+Para usar dependências customizadas (managers, serviços, etc.), você precisa registrá-las:
+
+```java
+@Override
+public void onEnable() {
+    commandFramework = new CommandFramework(this);
+    commandFramework.setup();
+    
+    // Registrar dependências customizadas
+    WarpManager warpManager = new WarpManager();
+    EconomyService economyService = new EconomyService();
+    DatabaseService databaseService = new DatabaseService();
+    
+    commandFramework.registerDependency(WarpManager.class, warpManager);
+    commandFramework.registerDependency(EconomyService.class, economyService);
+    commandFramework.registerDependency(DatabaseService.class, databaseService);
+}
+```
+
+#### Comandos com Dependências
+
+Comandos podem receber dependências através do construtor:
+
+```java
+@Command(name = "warp")
+public class WarpCommand {
+    
+    private final WarpManager warpManager;
+    
+    // O framework injeta automaticamente se WarpManager estiver registrado
+    public WarpCommand(WarpManager warpManager) {
+        this.warpManager = warpManager;
+    }
+    
+    @DefaultCommand
+    public Component list(CommandSender sender) {
+        var warps = warpManager.getAllWarps();
+        // ...
+    }
+}
+```
+
+**Importante:** Dependências devem ser registradas **antes** de registrar comandos ou usar providers que as requerem.
+
+#### Providers com Dependências
+
+Providers de tab completion também podem receber dependências:
+
+```java
+@RequiredArgsConstructor
+public class WarpSuggestionProvider implements SuggestionProvider<CommandSender> {
+    
+    private final WarpManager warpManager;
+    
+    @Override
+    public CompletableFuture<Suggestions> getSuggestions(
+        CommandContext<CommandSender> context,
+        SuggestionsBuilder builder
+    ) {
+        // Usa warpManager para fornecer sugestões
+        // ...
+    }
+}
+```
+
+Veja a seção [Tab Completion](#tab-completion) para mais detalhes.
+
 ### Cooldown
 
 O sistema de cooldown é automático e eficiente, usando cache em memória.
@@ -699,7 +843,26 @@ public void onEnable() {
 
 #### Registro Manual
 
-Para comandos que precisam de dependências (managers, serviços, etc.):
+Para comandos que precisam de dependências (managers, serviços, etc.), você tem duas opções:
+
+**Opção 1: Registrar dependências e usar scan automático (Recomendado)**
+
+```java
+@Override
+public void onEnable() {
+    commandFramework = new CommandFramework(this);
+    commandFramework.setup();
+    
+    // Criar e registrar dependências
+    BackLocationManager backManager = new BackLocationManager();
+    commandFramework.registerDependency(BackLocationManager.class, backManager);
+    
+    // O comando será registrado automaticamente pelo scan
+    // e receberá o BackLocationManager através do construtor
+}
+```
+
+**Opção 2: Registrar comando manualmente**
 
 ```java
 @Override
@@ -715,7 +878,9 @@ public void onEnable() {
 }
 ```
 
-**Importante:** Comandos registrados manualmente têm **prioridade** sobre o scan automático. Se o scan encontrar um comando já registrado manualmente, ele será ignorado automaticamente.
+**Importante:** 
+- Comandos registrados manualmente têm **prioridade** sobre o scan automático. Se o scan encontrar um comando já registrado manualmente, ele será ignorado automaticamente.
+- Dependências devem ser registradas **antes** de usar comandos ou providers que as requerem.
 
 #### Registro por Classe
 
@@ -856,6 +1021,29 @@ Todas as mensagens são enviadas via **Adventure API** com formatação **MiniMe
 ### Exemplo Completo: Sistema de Warps
 
 ```java
+// Provider de sugestões para warps
+@RequiredArgsConstructor
+public class WarpSuggestionProvider implements SuggestionProvider<CommandSender> {
+    
+    private final WarpManager warpManager;
+    
+    @Override
+    public CompletableFuture<Suggestions> getSuggestions(
+        CommandContext<CommandSender> context,
+        SuggestionsBuilder builder
+    ) {
+        String input = builder.getRemaining().toLowerCase();
+        
+        warpManager.getWarpsSorted().stream()
+            .map(Warp::name)
+            .filter(name -> name.toLowerCase().startsWith(input))
+            .forEach(builder::suggest);
+        
+        return builder.buildFuture();
+    }
+}
+
+// Comando de warps
 @Command(
     name = "warp",
     description = "Sistema de teleporte para warps",
@@ -954,6 +1142,24 @@ public class WarpCommand {
 }
 ```
 
+**Registro no plugin:**
+
+```java
+@Override
+public void onEnable() {
+    commandFramework = new CommandFramework(this);
+    commandFramework.setup();
+    
+    // Criar e registrar dependências
+    WarpManager warpManager = new WarpManager();
+    commandFramework.registerDependency(WarpManager.class, warpManager);
+    
+    // O comando será registrado automaticamente pelo scan
+    // e receberá o WarpManager através do construtor
+    // O WarpSuggestionProvider também receberá o WarpManager automaticamente
+}
+```
+
 ### Exemplo: Comando com Múltiplas Dependências
 
 ```java
@@ -1025,18 +1231,31 @@ public void onEnable() {
     commandFramework = new CommandFramework(this);
     commandFramework.setup();
     
-    // Criar serviços
+    // Criar e registrar serviços
     var economyService = new EconomyService();
     var databaseService = new DatabaseService();
     var messageService = new MessageService();
     
-    // Registrar comando com dependências
-    commandFramework.register(new EconomyCommand(
-        economyService,
-        databaseService,
-        messageService
-    ));
+    // Registrar dependências
+    commandFramework.registerDependency(EconomyService.class, economyService);
+    commandFramework.registerDependency(DatabaseService.class, databaseService);
+    commandFramework.registerDependency(MessageService.class, messageService);
+    
+    // O comando será registrado automaticamente pelo scan
+    // e receberá todas as dependências através do construtor
 }
+```
+
+**Alternativa - Registro Manual:**
+
+Se preferir registrar manualmente:
+
+```java
+commandFramework.register(new EconomyCommand(
+    economyService,
+    databaseService,
+    messageService
+));
 ```
 
 ---

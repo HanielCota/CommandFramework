@@ -7,6 +7,7 @@ import com.github.hanielcota.commandframework.annotation.TabCompletion;
 import com.github.hanielcota.commandframework.brigadier.CommandMetadata;
 import com.github.hanielcota.commandframework.cooldown.CooldownKey;
 import com.github.hanielcota.commandframework.cooldown.CooldownService;
+import com.github.hanielcota.commandframework.dependency.DependencyResolver;
 import com.github.hanielcota.commandframework.error.GlobalErrorHandler;
 import com.github.hanielcota.commandframework.annotation.Cooldown;
 import com.github.hanielcota.commandframework.annotation.RequiredPermission;
@@ -41,6 +42,7 @@ public class BukkitCommandAdapter {
     Plugin plugin;
     CooldownService cooldownService;
     GlobalErrorHandler errorHandler;
+    DependencyResolver dependencyResolver;
 
     public void register(CommandMetadata metadata) {
         if (metadata == null) {
@@ -832,13 +834,44 @@ public class BukkitCommandAdapter {
         /**
          * Obtém ou cria uma instância do provider usando cache estático.
          * Evita reflexão repetida para criação de instâncias.
+         * Suporta injeção de dependências para providers com construtores parametrizados.
          */
         private Object getOrCreateProvider(Class<?> providerClass) {
             return PROVIDER_CACHE.computeIfAbsent(providerClass, clazz -> {
                 try {
-                    return clazz.getDeclaredConstructor().newInstance();
+                    // Primeiro tenta construtor sem argumentos (compatibilidade retroativa)
+                    try {
+                        var noArgConstructor = clazz.getDeclaredConstructor();
+                        noArgConstructor.setAccessible(true);
+                        return noArgConstructor.newInstance();
+                    } catch (NoSuchMethodException e) {
+                        // Se não tem construtor sem argumentos, tenta encontrar um construtor
+                        var constructors = clazz.getDeclaredConstructors();
+                        if (constructors.length == 0) {
+                            LOGGER.warning("[CommandFramework] Provider " + clazz.getName() + " não possui construtores");
+                            return null;
+                        }
+                        
+                        // Usa o primeiro construtor encontrado
+                        var constructor = constructors[0];
+                        constructor.setAccessible(true);
+                        
+                        var parameters = constructor.getParameterCount();
+                        if (parameters == 0) {
+                            return constructor.newInstance();
+                        }
+                        
+                        // Resolve dependências usando o DependencyResolver
+                        var args = new Object[parameters];
+                        for (int i = 0; i < parameters; i++) {
+                            var paramType = constructor.getParameterTypes()[i];
+                            args[i] = dependencyResolver.resolve(paramType);
+                        }
+                        
+                        return constructor.newInstance(args);
+                    }
                 } catch (Exception e) {
-                    LOGGER.warning("[CommandFramework] Erro ao criar provider: " + e.getMessage());
+                    LOGGER.warning("[CommandFramework] Erro ao criar provider: " + clazz.getName() + " - " + e.getMessage());
                     return null;
                 }
             });

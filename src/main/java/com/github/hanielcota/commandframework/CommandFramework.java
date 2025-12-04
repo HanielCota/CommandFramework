@@ -232,6 +232,28 @@ public class CommandFramework {
     }
 
     /**
+     * Registra uma dependência customizada para ser resolvida automaticamente
+     * em comandos e providers de tab completion.
+     * 
+     * Exemplo:
+     * <pre>{@code
+     * framework.registerDependency(WarpManager.class, warpManager);
+     * }</pre>
+     * 
+     * @param type O tipo da dependência
+     * @param instance A instância da dependência
+     */
+    public void registerDependency(Class<?> type, Object instance) {
+        if (configuration == null) {
+            throw new IllegalStateException("Framework não foi configurado. Chame setup() primeiro.");
+        }
+        var resolver = configuration.getProcessor().getDependencyResolver();
+        if (resolver instanceof com.github.hanielcota.commandframework.dependency.DefaultDependencyResolver defaultResolver) {
+            defaultResolver.registerDependency(type, instance);
+        }
+    }
+
+    /**
      * Cria e configura o CommandFramework de forma simplificada (método estático alternativo).
      * Configura automaticamente o BukkitAudiences, MiniMessage e MessageProvider.
      * 

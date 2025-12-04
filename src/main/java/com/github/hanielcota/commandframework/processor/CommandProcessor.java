@@ -6,6 +6,8 @@ import com.github.hanielcota.commandframework.annotation.DefaultCommand;
 import com.github.hanielcota.commandframework.annotation.SubCommand;
 import com.github.hanielcota.commandframework.brigadier.CommandMetadata;
 import com.github.hanielcota.commandframework.cooldown.CooldownService;
+import com.github.hanielcota.commandframework.dependency.DefaultDependencyResolver;
+import com.github.hanielcota.commandframework.dependency.DependencyResolver;
 import com.github.hanielcota.commandframework.error.GlobalErrorHandler;
 import com.github.hanielcota.commandframework.execution.CommandExecutor;
 import com.github.hanielcota.commandframework.parser.ArgumentParserRegistry;
@@ -28,12 +30,18 @@ public class CommandProcessor {
 
     private static final Logger LOGGER = Logger.getLogger(CommandProcessor.class.getSimpleName());
 
+    @SuppressWarnings("unused") // Usado através do dependencyResolver
     Plugin plugin;
+    @SuppressWarnings("unused") // Usado através do dependencyResolver
     ArgumentParserRegistry parserRegistry;
+    @SuppressWarnings("unused") // Usado através do dependencyResolver
     CommandExecutor executor;
+    @SuppressWarnings("unused") // Usado através do dependencyResolver
     CooldownService cooldownService;
+    @SuppressWarnings("unused") // Usado através do dependencyResolver
     GlobalErrorHandler errorHandler;
     BukkitCommandAdapter adapter;
+    DependencyResolver dependencyResolver;
     
     /**
      * Set de comandos registrados manualmente (com prioridade sobre scan automático).
@@ -54,7 +62,8 @@ public class CommandProcessor {
         this.executor = executor;
         this.cooldownService = cooldownService;
         this.errorHandler = errorHandler;
-        this.adapter = new BukkitCommandAdapter(plugin, cooldownService, errorHandler);
+        this.dependencyResolver = new DefaultDependencyResolver(plugin, parserRegistry, executor, cooldownService, errorHandler);
+        this.adapter = new BukkitCommandAdapter(plugin, cooldownService, errorHandler, dependencyResolver);
     }
 
     public void processAndRegister(List<CommandDefinition> definitions) {
@@ -135,25 +144,16 @@ public class CommandProcessor {
     }
 
     private Object resolveDependency(Class<?> type) {
-        if (type == null) {
-            return null;
-        }
-        if (type.equals(Plugin.class)) {
-            return plugin;
-        }
-        if (type.equals(ArgumentParserRegistry.class)) {
-            return parserRegistry;
-        }
-        if (type.equals(CommandExecutor.class)) {
-            return executor;
-        }
-        if (type.equals(CooldownService.class)) {
-            return cooldownService;
-        }
-        if (type.equals(GlobalErrorHandler.class)) {
-            return errorHandler;
-        }
-        return null;
+        return dependencyResolver.resolve(type);
+    }
+    
+    /**
+     * Obtém o resolvedor de dependências para permitir registro de dependências customizadas.
+     * 
+     * @return O resolvedor de dependências
+     */
+    public DependencyResolver getDependencyResolver() {
+        return dependencyResolver;
     }
 
     /**
