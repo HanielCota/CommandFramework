@@ -394,6 +394,12 @@ public class BukkitCommandAdapter {
 
                 var result = method.invoke(metadata.getInstance(), invokeArgs);
 
+                // Trata o resultado do método
+                if (result == null) {
+                    // Método retornou void - isso é normal, não precisa fazer nada
+                    return;
+                }
+                
                 if (result instanceof Component component) {
                     sender.sendMessage(component);
                     return;
