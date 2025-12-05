@@ -54,6 +54,13 @@ public class CommandExecutor {
         }
 
         var value = result.get();
+        
+        // Verifica se o valor é uma exceção (erro na invocação)
+        if (value instanceof Exception e) {
+            sendError(context.getSender(), e);
+            return;
+        }
+        
         var async = context.asAsyncResult(value);
         if (async.isPresent()) {
             handleAsync(context, async.get());
@@ -73,6 +80,7 @@ public class CommandExecutor {
             var value = method.invoke(instance, parameters.toArray());
             return Optional.ofNullable(value);
         } catch (IllegalAccessException | InvocationTargetException e) {
+            // Retorna a exceção para ser tratada em invokeAndHandle
             return Optional.of(e);
         }
     }

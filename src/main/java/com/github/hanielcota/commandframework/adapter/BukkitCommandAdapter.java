@@ -11,6 +11,9 @@ import com.github.hanielcota.commandframework.dependency.DependencyResolver;
 import com.github.hanielcota.commandframework.error.GlobalErrorHandler;
 import com.github.hanielcota.commandframework.annotation.Cooldown;
 import com.github.hanielcota.commandframework.annotation.RequiredPermission;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -234,8 +237,11 @@ public class BukkitCommandAdapter {
                 return null;
             }
 
+            // Calcula a profundidade máxima baseada nos subcomandos registrados
+            int maxSubCommandDepth = calculateMaxSubCommandDepth();
+            int maxDepth = Math.min(args.length, maxSubCommandDepth);
+            
             // Tenta encontrar subcomandos de múltiplos níveis primeiro
-            int maxDepth = Math.min(args.length, 3);
             for (int depth = maxDepth; depth >= 1; depth--) {
                 // Constrói path sem criar arrays intermediários
                 StringBuilder pathBuilder = new StringBuilder();
@@ -254,6 +260,19 @@ public class BukkitCommandAdapter {
                 }
             }
             return null;
+        }
+        
+        /**
+         * Calcula a profundidade máxima dos subcomandos registrados.
+         * @return A profundidade máxima (número de níveis)
+         */
+        private int calculateMaxSubCommandDepth() {
+            int maxDepth = 0;
+            for (var parts : subCommandPartsCache.values()) {
+                maxDepth = Math.max(maxDepth, parts.length);
+            }
+            // Retorna pelo menos 1 para garantir que sempre tenta encontrar subcomandos
+            return Math.max(maxDepth, 1);
         }
 
         private void executeMethod(CommandSender sender, Method method, String[] args) {
@@ -313,12 +332,14 @@ public class BukkitCommandAdapter {
                     }
 
                     if (type.equals(Player.class)) {
+                        boolean isFirstPlayer = isFirstPlayerParameter(parameters, i);
                         invokeArgs[i] = resolvePlayerParameter(sender, parameters, args, i, argIndex);
-                        if (invokeArgs[i] == null && isFirstPlayerParameter(parameters, i)) {
+                        if (invokeArgs[i] == null && isFirstPlayer) {
                             sender.sendMessage(Component.text("Este comando só pode ser usado por jogadores."));
                             return;
                         }
-                        if (!isFirstPlayerParameter(parameters, i) && argIndex < args.length) {
+                        // Se não é o primeiro parâmetro Player, sempre incrementa argIndex se usou um argumento
+                        if (!isFirstPlayer && argIndex < args.length) {
                             argIndex++;
                         }
                         continue;
@@ -803,32 +824,139 @@ public class BukkitCommandAdapter {
                     return completions;
                 }
                 
+                // Verifica se é um SuggestionProvider do Brigadier
+                if (provider instanceof SuggestionProvider<?> suggestionProvider) {
+                    return getBrigadierProviderCompletions(suggestionProvider, input);
+                }
+                
+                // Fallback para providers com método customizado
                 var methods = providerClass.getDeclaredMethods();
                 for (var method : methods) {
                     var methodName = method.getName();
                     if (!methodName.equals("getSuggestions") && !methodName.equals("complete")) {
                         continue;
                     }
+                    
+                    var paramCount = method.getParameterCount();
                     method.setAccessible(true);
-                    var result = method.invoke(provider);
-                    if (!(result instanceof List<?> list)) {
+                    
+                    // Tenta invocar com diferentes assinaturas
+                    Object result = null;
+                    if (paramCount == 0) {
+                        result = method.invoke(provider);
+                    } else if (paramCount == 2) {
+                        // Pode ser SuggestionProvider do Brigadier
+                        var context = createMockCommandContext();
+                        var builder = new SuggestionsBuilder(input, input.length());
+                        result = method.invoke(provider, context, builder);
+                    }
+                    
+                    if (result instanceof List<?> list) {
+                        int count = 0;
+                        for (var item : list) {
+                            if (count >= 50) break;
+                            var str = item.toString();
+                            if (str.toLowerCase().startsWith(input)) {
+                                completions.add(str);
+                                count++;
+                            }
+                        }
                         break;
                     }
-                    int count = 0;
-                    for (var item : list) {
-                        if (count >= 50) break;
-                        var str = item.toString();
-                        if (str.toLowerCase().startsWith(input)) {
-                            completions.add(str);
-                            count++;
-                        }
-                    }
-                    break;
                 }
             } catch (Exception e) {
                 LOGGER.warning("[CommandFramework] Erro ao obter sugestões do provider: " + e.getMessage());
             }
             return completions;
+        }
+        
+        /**
+         * Obtém completions de um SuggestionProvider do Brigadier.
+         */
+        private List<String> getBrigadierProviderCompletions(SuggestionProvider<?> provider, String input) {
+            var completions = new ArrayList<String>();
+            try {
+                // Cria um CommandContext mínimo usando reflexão
+                var context = createMockCommandContext();
+                if (context == null) {
+                    LOGGER.warning("[CommandFramework] Não foi possível criar CommandContext para provider");
+                    return completions;
+                }
+                
+                var builder = new SuggestionsBuilder(input, input.length());
+                
+                // Invoca o provider usando reflexão para garantir tipos corretos
+                var method = provider.getClass().getMethod("getSuggestions", 
+                    CommandContext.class, SuggestionsBuilder.class);
+                method.setAccessible(true);
+                
+                @SuppressWarnings("unchecked")
+                var future = (java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>) 
+                    method.invoke(provider, context, builder);
+                
+                // Aguarda o resultado
+                var suggestions = future.get();
+                
+                // Extrai as sugestões
+                int count = 0;
+                for (var suggestion : suggestions.getList()) {
+                    if (count >= 50) break;
+                    var text = suggestion.getText();
+                    if (text.toLowerCase().startsWith(input)) {
+                        completions.add(text);
+                        count++;
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.warning("[CommandFramework] Erro ao obter sugestões do Brigadier provider: " + e.getMessage());
+            }
+            return completions;
+        }
+        
+        /**
+         * Cria um CommandContext mock para uso com SuggestionProvider.
+         * Usa reflexão para criar uma instância mínima.
+         */
+        @SuppressWarnings("unchecked")
+        private CommandContext<CommandSender> createMockCommandContext() {
+            try {
+                // Tenta criar um CommandContext usando o construtor via reflexão
+                var constructors = CommandContext.class.getDeclaredConstructors();
+                if (constructors.length == 0) {
+                    return null;
+                }
+                
+                var constructor = constructors[0];
+                constructor.setAccessible(true);
+                
+                var paramTypes = constructor.getParameterTypes();
+                var params = new Object[paramTypes.length];
+                
+                // Preenche os parâmetros com valores padrão
+                for (int i = 0; i < paramTypes.length; i++) {
+                    var type = paramTypes[i];
+                    if (type == CommandSender.class || CommandSender.class.isAssignableFrom(type)) {
+                        params[i] = Bukkit.getConsoleSender();
+                    } else if (type == String.class) {
+                        params[i] = "";
+                    } else if (type == java.util.Map.class) {
+                        params[i] = Collections.emptyMap();
+                    } else if (type == java.util.List.class) {
+                        params[i] = Collections.emptyList();
+                    } else if (type == boolean.class || type == Boolean.class) {
+                        params[i] = false;
+                    } else {
+                        params[i] = null;
+                    }
+                }
+                
+                return (CommandContext<CommandSender>) constructor.newInstance(params);
+            } catch (Exception e) {
+                // Se falhar, retorna null e o provider pode não funcionar perfeitamente
+                // mas pelo menos não quebra
+                LOGGER.warning("[CommandFramework] Não foi possível criar CommandContext mock: " + e.getMessage());
+                return null;
+            }
         }
         
         /**

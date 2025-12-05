@@ -117,26 +117,36 @@ public class CommandProcessor {
         }
 
         try {
-            var constructors = type.getDeclaredConstructors();
-            if (constructors.length == 0) {
-                return type.getDeclaredConstructor().newInstance();
+            // Primeiro tenta encontrar um construtor sem parâmetros
+            try {
+                var noArgConstructor = type.getDeclaredConstructor();
+                noArgConstructor.setAccessible(true);
+                return noArgConstructor.newInstance();
+            } catch (NoSuchMethodException e) {
+                // Se não tem construtor sem argumentos, procura construtores com parâmetros
+                var constructors = type.getDeclaredConstructors();
+                if (constructors.length == 0) {
+                    LOGGER.warning("[CommandFramework] Classe " + type.getName() + " não possui construtores");
+                    return null;
+                }
+
+                // Usa o primeiro construtor encontrado
+                var constructor = constructors[0];
+                constructor.setAccessible(true);
+
+                var parameters = constructor.getParameterCount();
+                if (parameters == 0) {
+                    return constructor.newInstance();
+                }
+
+                var args = new Object[parameters];
+                for (int i = 0; i < parameters; i++) {
+                    var paramType = constructor.getParameterTypes()[i];
+                    args[i] = resolveDependency(paramType);
+                }
+
+                return constructor.newInstance(args);
             }
-
-            var constructor = constructors[0];
-            constructor.setAccessible(true);
-
-            var parameters = constructor.getParameterCount();
-            if (parameters == 0) {
-                return constructor.newInstance();
-            }
-
-            var args = new Object[parameters];
-            for (int i = 0; i < parameters; i++) {
-                var paramType = constructor.getParameterTypes()[i];
-                args[i] = resolveDependency(paramType);
-            }
-
-            return constructor.newInstance(args);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "[CommandFramework] Erro ao criar instância de " + type.getName() + ": " + e.getMessage(), e);
             return null;
