@@ -1,33 +1,66 @@
+<div align="center">
+
 # CommandFramework
 
-Annotation-based command framework for Paper and Velocity with a shared core, zero YAML registration, automatic parsing,
-permissions, cooldowns, confirmation flows, help, and tab-complete.
+**Annotation-driven command framework for Paper and Velocity**
+**Zero YAML. Zero `plugin.yml` command declarations. Java 25.**
 
-- Author: Haniel Cota
-- GitHub: https://github.com/HanielCota
-- Package: `io.github.hanielcota.commandframework`
-- License: MIT
+[![Build](https://github.com/HanielCota/CommandFramework/actions/workflows/build.yml/badge.svg)](https://github.com/HanielCota/CommandFramework/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/HanielCota/CommandFramework?label=release&color=0b7)](https://github.com/HanielCota/CommandFramework/releases/latest)
+[![JitPack](https://img.shields.io/jitpack/version/com.github.HanielCota/CommandFramework.svg)](https://jitpack.io/#HanielCota/CommandFramework)
+[![Java](https://img.shields.io/badge/Java-25-orange?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/25/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## Highlights
+</div>
 
-- Multi-module Gradle Kotlin DSL project: `core`, `paper`, `velocity`
-- Java 25 toolchain
-- Zero `plugin.yml` / zero `commands:` registration
-- Shared pipeline with permission, player-only, cooldown, parsing, confirm, and execution stages
-- Automatic command scanning with field injection via `@Inject`
-- Custom argument resolvers and custom middlewares
-- Thread-safe cooldowns, confirmations, rate-limits, and immutable command metadata
+---
 
-## Installation
+## Why CommandFramework
 
-JitPack publishes the multi-module artifacts under `com.github.HanielCota.CommandFramework:<module>:<tag>`. This follows
-the official JitPack multi-module convention for repository modules.
+- **Declarative.** Add `@Command` + `@Execute` to a class, call `build()`, done. No `plugin.yml`, no `CommandMap` juggling.
+- **Shared core, thin adapters.** Same commands run on Paper and Velocity. Swap the entry point.
+- **Brigadier-native.** Hooks into Paper's `LifecycleEvents.COMMANDS` registrar and Velocity's `BrigadierCommand`, so suggestions and parse errors are real client-side Brigadier.
+- **Safety built in.** Per-sender cooldowns, confirmation flows, fixed-window rate limits, async-on-virtual-threads — all thread-safe via Caffeine and `ConcurrentHashMap`.
+- **Fluent, typed.** `PaperCommandFramework.paper(this).bind(...).resolver(...).middleware(...).build()`.
+- **Open API.** Custom resolvers, middlewares, message providers, and platform bridges are all first-class.
 
-Add the repository in `settings.gradle.kts`:
+---
+
+## Table of contents
+
+1. [Install](#install)
+2. [Quick start](#quick-start)
+3. [Core concepts](#core-concepts)
+4. [Features](#features)
+   - [Subcommands](#subcommands)
+   - [Arguments and resolvers](#arguments-and-resolvers)
+   - [Permissions](#permissions)
+   - [Cooldowns](#cooldowns)
+   - [Confirmations](#confirmations)
+   - [Player-only and async](#player-only-and-async)
+   - [Dependency injection](#dependency-injection)
+   - [Help and tab completion](#help-and-tab-completion)
+   - [Middlewares](#middlewares)
+   - [Rate limiting](#rate-limiting)
+   - [Messages and MiniMessage](#messages-and-minimessage)
+5. [Annotation reference](#annotation-reference)
+6. [Builder API reference](#builder-api-reference)
+7. [Architecture](#architecture)
+8. [Testing](#testing)
+9. [Compatibility](#compatibility)
+10. [License](#license)
+
+---
+
+## Install
+
+### JitPack (recommended)
+
+Add the repository and the modules you need:
 
 ```kotlin
+// settings.gradle.kts
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         mavenCentral()
         maven("https://repo.papermc.io/repository/maven-public/")
@@ -36,27 +69,18 @@ dependencyResolutionManagement {
 }
 ```
 
-Add one or more modules:
-
 ```kotlin
+// build.gradle.kts
 dependencies {
-    implementation("com.github.HanielCota.CommandFramework:core:<tag>")
-    implementation("com.github.HanielCota.CommandFramework:paper:<tag>")
-    implementation("com.github.HanielCota.CommandFramework:velocity:<tag>")
+    // Pick the module matching your platform. core is included transitively.
+    implementation("com.github.HanielCota.CommandFramework:paper:0.1.0")
+    implementation("com.github.HanielCota.CommandFramework:velocity:0.1.0")
 }
 ```
 
-If you want the whole repository aggregate published by JitPack, use:
+Use the latest tag: [![JitPack](https://img.shields.io/jitpack/version/com.github.HanielCota/CommandFramework.svg)](https://jitpack.io/#HanielCota/CommandFramework)
 
-```kotlin
-dependencies {
-    implementation("com.github.HanielCota:CommandFramework:<tag>")
-}
-```
-
-### Alternative: GitHub Packages
-
-Releases are also published to GitHub Packages. Authentication is required even for public packages.
+### GitHub Packages (alternative)
 
 ```kotlin
 repositories {
@@ -70,21 +94,38 @@ repositories {
 }
 
 dependencies {
-    implementation("io.github.hanielcota.commandframework:core:<version>")
-    implementation("io.github.hanielcota.commandframework:paper:<version>")
-    implementation("io.github.hanielcota.commandframework:velocity:<version>")
+    implementation("io.github.hanielcota.commandframework:paper:0.1.0")
 }
 ```
 
-Configure credentials via `~/.gradle/gradle.properties` (`gpr.user` / `gpr.key`) or `GITHUB_ACTOR` / `GITHUB_TOKEN`
-environment variables. The token needs `read:packages` scope.
+GitHub Packages requires a token with `read:packages` scope even for public packages.
 
-## Quick Start
+### Maven
 
-### Paper
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>com.github.HanielCota.CommandFramework</groupId>
+        <artifactId>paper</artifactId>
+        <version>0.1.0</version>
+    </dependency>
+</dependencies>
+```
+
+---
+
+## Quick start
+
+### Paper plugin
 
 ```java
-import io.github.hanielcota.commandframework.MessageKey;
 import io.github.hanielcota.commandframework.paper.PaperCommandFramework;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -92,14 +133,13 @@ public final class MyPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         PaperCommandFramework.paper(this)
-            .bind(EconomyService.class, new EconomyService())
-            .message(MessageKey.NO_PERMISSION, "<red>Sem permissao!")
+            .scanPackage("com.example.mycommands")
             .build();
     }
 }
 ```
 
-### Velocity
+### Velocity plugin
 
 ```java
 import com.google.inject.Inject;
@@ -108,155 +148,464 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import io.github.hanielcota.commandframework.velocity.VelocityCommandFramework;
 
 @Plugin(id = "myplugin", name = "MyPlugin", version = "1.0.0")
-public final class MyPlugin {
+public final class MyProxyPlugin {
     @Inject
-    public MyPlugin(ProxyServer server) {
-        VelocityCommandFramework.velocity(server, this).build();
+    public MyProxyPlugin(ProxyServer server) {
+        VelocityCommandFramework.velocity(server, this)
+            .scanPackage("com.example.proxycommands")
+            .build();
     }
 }
 ```
 
-### Example Command
+No `plugin.yml` `commands:` entries. No manual registration. The framework scans the package for annotated classes, builds them, and registers each one through the native Brigadier APIs.
+
+### A complete command
 
 ```java
 import io.github.hanielcota.commandframework.annotation.Arg;
 import io.github.hanielcota.commandframework.annotation.Command;
-import io.github.hanielcota.commandframework.annotation.Confirm;
 import io.github.hanielcota.commandframework.annotation.Cooldown;
 import io.github.hanielcota.commandframework.annotation.Description;
 import io.github.hanielcota.commandframework.annotation.Execute;
-import io.github.hanielcota.commandframework.annotation.Inject;
-import io.github.hanielcota.commandframework.annotation.Optional;
 import io.github.hanielcota.commandframework.annotation.Permission;
 import io.github.hanielcota.commandframework.annotation.Sender;
 import java.util.concurrent.TimeUnit;
+import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 
-@Command(name = "eco", aliases = {"economy"}, description = "Economy commands")
-@Permission("myplugin.eco")
-public final class EconomyCommand {
-
-    @Inject private EconomyService economy;
+@Command(name = "heal", aliases = {"curar"}, description = "Heal a player")
+@Permission("myplugin.heal")
+public final class HealCommand {
 
     @Execute
-    @Description("Check your balance")
-    public void balance(@Sender Player sender) {
-        sender.sendMessage(net.kyori.adventure.text.Component.text(
-            "Balance: $" + economy.getBalance(sender.getUniqueId())
-        ));
+    @Description("Heal yourself")
+    @Cooldown(value = 30, unit = TimeUnit.SECONDS, bypassPermission = "myplugin.heal.bypass")
+    public void healSelf(@Sender Player sender) {
+        sender.setHealth(sender.getMaxHealth());
+        sender.sendMessage(Component.text("Healed."));
     }
 
-    @Execute(sub = "pay")
-    @Description("Pay another player")
-    @Cooldown(value = 30, unit = TimeUnit.SECONDS, bypassPermission = "myplugin.eco.cooldown.bypass")
-    public void pay(@Sender Player sender, Player target, double amount) {
-        economy.transfer(sender.getUniqueId(), target.getUniqueId(), amount);
-    }
-
-    @Execute(sub = "reset")
-    @Permission("myplugin.eco.admin")
-    @Confirm(expireSeconds = 10, commandName = "confirmar")
-    public void reset(@Sender Player sender, Player target) {
-        economy.reset(target.getUniqueId());
-    }
-
-    @Execute(sub = "note")
-    @Permission("myplugin.eco.admin")
-    public void note(@Sender Player sender, Player target, @Arg(greedy = true) String message) {
-        economy.addNote(target.getUniqueId(), message);
-    }
-
-    @Execute(sub = "give")
-    @Permission("myplugin.eco.admin")
-    public void give(@Sender Player sender, Player target, double amount, @Optional("false") boolean silent) {
-        economy.give(target.getUniqueId(), amount);
+    @Execute(sub = "other")
+    @Description("Heal another player")
+    @Permission("myplugin.heal.other")
+    public void healOther(@Sender Player sender, Player target) {
+        target.setHealth(target.getMaxHealth());
+        sender.sendMessage(Component.text("Healed " + target.getName()));
     }
 }
 ```
 
-## Annotation Reference
+Usage in game:
+- `/heal` — heals the sender (30s cooldown, bypassable by permission).
+- `/heal other <name>` — heals someone else (requires `myplugin.heal.other`).
+- `/curar` — alias, same behavior.
+- `<Tab>` on `<name>` — Brigadier-native completion powered by the built-in `Player` resolver.
 
-| Annotation                                         | Target        | Purpose                                                                                                  |
-|----------------------------------------------------|---------------|----------------------------------------------------------------------------------------------------------|
-| `@Command(name, aliases, description, permission)` | class         | Declares a top-level command root                                                                        |
-| `@Execute(sub)`                                    | method        | Declares a root executor when empty, otherwise a subcommand executor                                     |
-| `@Sender`                                          | parameter     | Injects `CommandActor` or a supported platform sender/player type                                        |
-| `@Arg(value, greedy, maxLength)`                   | parameter     | Overrides inferred argument metadata                                                                     |
-| `@Permission`                                      | class, method | Declares base permission on class or override permission on method                                       |
-| `@Cooldown`                                        | method        | Applies a command cooldown with optional bypass permission                                               |
-| `@Optional`                                        | parameter     | Declares a default value when an argument is omitted                                                     |
-| `@Async`                                           | method        | Runs method invocation on a virtual thread after parsing; async sender injection must use `CommandActor` |
-| `@RequirePlayer`                                   | class, method | Restricts execution to players; class-level usage applies to all executors in that class                 |
-| `@Confirm`                                         | method        | Delays execution until `/confirm` or a custom confirmation command is used                               |
-| `@Description`                                     | method        | Supplies the help text for an executor                                                                   |
-| `@Inject`                                          | field         | Injects a singleton binding registered on the builder                                                    |
+---
 
-## Custom Resolver
+## Core concepts
+
+### Commands
+
+A **command class** is any class annotated with `@Command`. Its `name` is the top-level label; `aliases` add alternative labels; `description` shows in `/help`; `permission` applies to every executor in the class.
+
+### Executors
+
+A **method** annotated with `@Execute` is an executor. `@Execute` (no `sub`) is the root executor — invoked by `/name`. `@Execute(sub = "foo")` is a subcommand — invoked by `/name foo`.
+
+One class can mix a root and any number of subcommands.
+
+### Senders
+
+The first parameter annotated with `@Sender` (or the first parameter whose type the platform recognises as a sender type) receives the caller. Supported types depend on the platform:
+
+| Platform | Sender types |
+|---|---|
+| Paper | `CommandActor`, `CommandSender`, `Player` |
+| Velocity | `CommandActor`, `CommandSource`, `Player` |
+
+`CommandActor` is the platform-neutral abstraction — use it in core/shared command classes.
+
+### Results
+
+Every `dispatch` returns a `CommandResult` from a sealed interface. You rarely inspect it directly (the framework sends the right message automatically), but tests and middlewares do:
 
 ```java
-import io.github.hanielcota.commandframework.ArgumentResolutionContext;
-import io.github.hanielcota.commandframework.ArgumentResolver;
+sealed interface CommandResult permits
+    Success, Handled, Failure, InvalidArgs, NoPermission, PlayerOnly,
+    CooldownActive, PendingConfirmation, HelpShown, RateLimited { }
+```
 
-public record RegionId(String value) {}
+---
 
-public final class RegionResolver implements ArgumentResolver<RegionId> {
+## Features
+
+### Subcommands
+
+```java
+@Command(name = "eco")
+public final class EconomyCommand {
+    @Execute
+    public void balance(@Sender Player sender) { /* ... */ }
+
+    @Execute(sub = "pay")
+    public void pay(@Sender Player sender, Player target, double amount) { /* ... */ }
+
+    @Execute(sub = "reset")
+    public void reset(@Sender Player sender, Player target) { /* ... */ }
+}
+```
+
+### Arguments and resolvers
+
+Built-in resolvers: `String`, `Boolean` / `boolean`, `Integer` / `int`, `Long` / `long`, `Double` / `double`, `Float` / `float`, `UUID`, any `Enum`.
+
+Paper adds: `Player`, `World`.
+Velocity adds: `Player`.
+
+Parameter name is inferred via `-parameters` (Gradle toolchain already enables this). Override with `@Arg("name")` when you want different display text.
+
+#### Greedy
+
+Consume the rest of the input as a single string:
+
+```java
+@Execute(sub = "note")
+public void note(@Sender Player sender, Player target, @Arg(greedy = true) String message) { /* ... */ }
+```
+
+#### Optional
+
+Provide a default when the argument is missing:
+
+```java
+@Execute(sub = "give")
+public void give(@Sender Player sender, Player target, double amount,
+                 @Optional("false") boolean silent) { /* ... */ }
+```
+
+#### Custom resolvers
+
+Implement `ArgumentResolver<T>` and register it:
+
+```java
+public final class KitResolver implements ArgumentResolver<Kit> {
+    private final KitService kits;
+    public KitResolver(KitService kits) { this.kits = kits; }
+
+    @Override public Class<Kit> type() { return Kit.class; }
+
     @Override
-    public Class<RegionId> type() {
-        return RegionId.class;
+    public Kit resolve(ArgumentResolutionContext ctx, String input) throws ArgumentResolveException {
+        return this.kits.find(input).orElseThrow(() ->
+            new ArgumentResolveException("kit", input, "Unknown kit"));
     }
 
     @Override
-    public RegionId resolve(ArgumentResolutionContext context, String input) {
-        return new RegionId(input.toLowerCase());
-    }
-
-    @Override
-    public java.util.List<String> suggest(io.github.hanielcota.commandframework.CommandActor actor, String currentInput) {
-        return java.util.List.of("spawn", "market", "arena").stream()
-            .filter(value -> value.startsWith(currentInput))
+    public List<String> suggest(CommandActor actor, String currentInput) {
+        return this.kits.names().stream()
+            .filter(n -> n.startsWith(currentInput))
             .toList();
     }
 }
 ```
 
-Register it:
-
 ```java
 PaperCommandFramework.paper(this)
-    .resolver(new RegionResolver())
+    .resolver(new KitResolver(kitService))
     .build();
 ```
 
-## Custom Middleware
+### Permissions
 
-Custom middlewares run before the framework pipeline.
+Class-level `@Permission` applies to every executor. Method-level overrides:
 
 ```java
-import io.github.hanielcota.commandframework.CommandMiddleware;
-import io.github.hanielcota.commandframework.CommandResult;
+@Command(name = "admin")
+@Permission("myplugin.admin")
+public final class AdminCommand {
+    @Execute public void panel(@Sender Player sender) { /* needs myplugin.admin */ }
 
-CommandMiddleware audit = (context, chain) -> {
-    System.out.println("Running " + context.commandPath() + " for " + context.actor().name());
-    CommandResult result = chain.proceed(context);
-    System.out.println("Finished " + context.commandPath() + " with " + result.getClass().getSimpleName());
-    return result;
-};
+    @Execute(sub = "ban")
+    @Permission("myplugin.admin.ban")
+    public void ban(@Sender Player sender, Player target) { /* needs myplugin.admin.ban */ }
+}
+```
 
+### Cooldowns
+
+Per-sender, per-command-path. Entries expire through a Caffeine `Expiry`, so idle state consumes no memory.
+
+```java
+@Execute
+@Cooldown(value = 5, unit = TimeUnit.SECONDS, bypassPermission = "myplugin.heal.bypass")
+public void heal(@Sender Player sender) { /* ... */ }
+```
+
+Cooldowns are only committed **after** argument parsing succeeds, so a typo does not lock out the legitimate retry.
+
+### Confirmations
+
+Prompt and gate a destructive action behind a second command:
+
+```java
+@Execute(sub = "wipe")
+@Permission("myplugin.admin.wipe")
+@Confirm(expireSeconds = 10, commandName = "confirmar")
+public void wipe(@Sender Player sender) { /* ... */ }
+```
+
+Sender sees: `Run /confirmar within 10s to confirm.`
+
+Typing `/confirmar` within the window executes the original invocation with the original arguments.
+
+### Player-only and async
+
+```java
+@Command(name = "home")
+@RequirePlayer
+public final class HomeCommand {
+    @Execute
+    @Async
+    public void home(@Sender Player player) {
+        // Runs on a virtual thread. Safe for DB reads, HTTP, etc.
+        // sendMessage automatically hops back for Paper.
+    }
+}
+```
+
+`@RequirePlayer` can also be placed on individual methods.
+
+### Dependency injection
+
+Bind services in the builder, receive them as fields in commands and resolvers:
+
+```java
 PaperCommandFramework.paper(this)
-    .middleware(audit)
+    .bind(EconomyService.class, new EconomyService(database))
+    .bind(KitService.class, new KitService())
     .build();
 ```
 
-## Notes
+```java
+@Command(name = "bal")
+public final class BalanceCommand {
+    @Inject private EconomyService economy;
 
-- Argument names are inferred from Java parameter names when compiled with `-parameters`.
-- Platform resolvers run during parsing on the caller thread; only `@Async` method invocation moves to a virtual thread.
-- Async executors must inject `@Sender CommandActor`; raw platform sender types are rejected at startup to avoid
-  off-thread API access.
-- `@RequirePlayer` on a class applies to every executor declared in that class; method-level usage marks only that
-  executor.
-- Global rate-limit defaults to 30 commands per 10 seconds per player and is configurable with
-  `.rateLimit(int, Duration)`.
-- Confirmation commands are auto-registered from `@Confirm(commandName = "...")`.
-- Built-in message templates are in English and can be replaced per key with `.message(...)` or entirely with
-  `.messages(...)`.
+    @Execute public void balance(@Sender Player sender) {
+        sender.sendMessage(Component.text(this.economy.getBalance(sender.getUniqueId())));
+    }
+}
+```
+
+`JavaPlugin` (Paper) and `ProxyServer` (Velocity) are auto-bound by the entry point. Resolution tries exact type first, then falls back to a single assignable match; ambiguous matches throw `IllegalStateException` at build time.
+
+### Help and tab completion
+
+`/command` with no matching subcommand renders the help template — subcommands visible only if the sender has their permission. Customise with:
+
+```java
+builder.message(MessageKey.HELP_HEADER, "<gold>=== /{command} ===");
+builder.message(MessageKey.HELP_ENTRY, "<yellow>/{usage}</yellow> <gray>-</gray> {description}");
+```
+
+Tab completion is automatic, powered by Brigadier and the active resolver for each parameter. Custom resolvers contribute their `suggest(...)` output.
+
+### Middlewares
+
+Wrap every dispatch with cross-cutting logic — auditing, tracing, metrics:
+
+```java
+public final class AuditMiddleware implements CommandMiddleware {
+    private final Audit audit;
+    public AuditMiddleware(Audit audit) { this.audit = audit; }
+
+    @Override
+    public CommandResult handle(CommandContext ctx, Chain chain) {
+        this.audit.logStart(ctx.actor(), ctx.label(), ctx.rawArguments());
+        CommandResult result = chain.proceed(ctx);
+        this.audit.logEnd(ctx.actor(), ctx.label(), result);
+        return result;
+    }
+}
+```
+
+```java
+builder.middleware(new AuditMiddleware(audit));
+```
+
+Middlewares run in registration order, wrapping the dispatcher.
+
+### Rate limiting
+
+A fixed-window rate limiter protects against command spam. Default: 30 commands per 10 seconds per sender. Override:
+
+```java
+builder.rateLimit(50, Duration.ofMinutes(1));
+```
+
+Console is never rate-limited.
+
+### Messages and MiniMessage
+
+Customise any of the built-in keys:
+
+```java
+builder
+    .message(MessageKey.NO_PERMISSION, "<red>Acesso negado.")
+    .message(MessageKey.COOLDOWN_ACTIVE, "<yellow>Aguarde <bold>{remaining}</bold>.");
+```
+
+Or swap the provider entirely:
+
+```java
+builder.messages(key -> switch (key) {
+    case NO_PERMISSION -> "<red>No perm.";
+    // ...
+    default -> "";
+});
+```
+
+All templates are MiniMessage — colours, formatting, clickable/hoverable components all supported.
+
+---
+
+## Annotation reference
+
+| Annotation | Target | Purpose |
+|---|---|---|
+| `@Command(name, aliases, description, permission)` | class | Declares a top-level command root. |
+| `@Execute(sub)` | method | Root (`sub=""`) or subcommand executor. |
+| `@Sender` | parameter | Marks the sender parameter explicitly. |
+| `@Arg(value, greedy, maxLength)` | parameter | Overrides inferred argument metadata. |
+| `@Optional(value)` | parameter | Default value when argument omitted. |
+| `@Description(value)` | method | Description shown in help output. |
+| `@Permission(value)` | class, method | Permission requirement; method overrides class. |
+| `@Cooldown(value, unit, bypassPermission)` | method | Per-sender cooldown with optional bypass. |
+| `@Confirm(expireSeconds, commandName)` | method | Two-step confirmation flow. |
+| `@RequirePlayer` | class, method | Console is rejected with `PLAYER_ONLY` message. |
+| `@Async` | method | Runs the executor on a virtual thread. |
+| `@Inject` | field | Injects a binding (exact type or assignable). |
+
+---
+
+## Builder API reference
+
+All mutators are fluent (`return this`). `build()` finalises registration.
+
+| Method | Purpose |
+|---|---|
+| `scanPackage(String)` | Add a package to scan for `@Command` classes. |
+| `command(Object)` | Register a pre-instantiated command. |
+| `commands(Object...)` | Register several commands. |
+| `bind(Class<T>, T)` | Bind a dependency for `@Inject` / resolvers. |
+| `resolver(ArgumentResolver<?>)` | Register a custom argument resolver. |
+| `middleware(CommandMiddleware)` | Register a middleware. |
+| `message(MessageKey, String)` | Override a single message template. |
+| `messages(MessageProvider)` | Replace the message provider entirely. |
+| `rateLimit(int, Duration)` | Configure the per-sender rate limit. |
+| `build()` | Build, validate, register. Returns `CommandFramework<S>`. |
+
+---
+
+## Architecture
+
+```
++-------------------+         +-----------------------+
+|  Paper plugin     |         |  Velocity plugin      |
+|  onEnable(...)    |         |  @Plugin ctor(...)    |
++----------+--------+         +----------+------------+
+           |                             |
+           v                             v
++----------+----------+         +--------+-----------+
+| PaperCommandFw      |         | VelocityCommandFw  |
+| (extends Builder)   |         | (extends Builder)  |
++----------+----------+         +--------+-----------+
+           |                             |
+           |  .bind / .resolver /        |
+           |  .middleware / .build()     |
+           v                             v
++----------+-----------------------------+------------+
+|              CommandFrameworkBuilder (core)         |
+|                                                     |
+|  InternalCommandBuilder ----> CommandFramework<S>   |
+|     - scans classes                                 |
+|     - validates signatures                          |
+|     - injects fields                                |
+|     - builds CommandDispatcher                      |
++-----------+-----------------------------------------+
+            |
+            v
++-----------+--------------------------+
+| CommandDispatcher (pipeline)         |
+|  1. permission    4. argument parse  |
+|  2. player-only   5. confirmation    |
+|  3. cooldown      6. execute (sync / |
+|                      virtual thread) |
++--------------------------------------+
+             ^           ^
+             |           |
+     CooldownMgr   ConfirmationMgr    RateLimiter
+     (Caffeine)    (Caffeine)         (Caffeine)
+```
+
+### Module layout
+
+```
+core/       Platform-agnostic: dispatcher, resolvers, managers, message service.
+paper/      PaperPlatformBridge + Brigadier via LifecycleEvents.COMMANDS.
+velocity/   VelocityPlatformBridge + BrigadierCommand via CommandManager.
+```
+
+Both `paper` and `velocity` ship as shadow jars with Caffeine and ClassGraph relocated to `io.github.hanielcota.commandframework.libs.*` to avoid classpath clashes.
+
+---
+
+## Testing
+
+The core is tested in isolation with a `TestBridge` + `TestPlayer` fixture. Paper and Velocity adapters are tested with Mockito 5 — no MockBukkit required.
+
+```bash
+./gradlew test
+```
+
+As of 0.1.0: **86 tests** (59 core, 13 paper, 14 velocity). Coverage includes every annotation, error path, cooldown/confirmation timing, rate limiting, and dispatcher semantics.
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for local setup, PR conventions, and release flow.
+
+---
+
+## Compatibility
+
+| Tier | Version |
+|---|---|
+| Java | 25 (toolchain) |
+| Gradle | 9.4.1 (via wrapper) |
+| Paper API | `26.1.2.build.+` (MC 1.21+) |
+| Velocity API | `3.4.0-SNAPSHOT` |
+| Adventure | 4.26.1 |
+| MiniMessage | Required at runtime (shipped non-transitively by the shadowed jar) |
+
+Paper plugins must be built against the modern Paper API (Brigadier lifecycle events) — legacy `JavaPlugin.getCommand(...)` is not used.
+
+---
+
+## License
+
+MIT. See [`LICENSE`](./LICENSE) (or the MIT text linked in every POM).
+
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`CHANGELOG.md`](./CHANGELOG.md).
+
+Issues and PRs welcome at [HanielCota/CommandFramework](https://github.com/HanielCota/CommandFramework).
+
+---
+
+<div align="center">
+
+Built with care for Paper and Velocity networks.
+Maintained by [@HanielCota](https://github.com/HanielCota).
+
+</div>
