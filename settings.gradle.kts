@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "CommandFramework"
 
-include("core", "paper", "velocity")
+include("core", "paper", "velocity", "core-testkit", "processor", "gradle-plugin")

@@ -43,6 +43,7 @@ public final class InternalCommandBuilder<S> {
     private final List<Object> commandInstances;
     private final int rateLimitCommands;
     private final Duration rateLimitWindow;
+    private final boolean debug;
 
     public InternalCommandBuilder(
             PlatformBridge<S> bridge,
@@ -54,7 +55,8 @@ public final class InternalCommandBuilder<S> {
             List<String> scanPackages,
             List<Object> commandInstances,
             int rateLimitCommands,
-            Duration rateLimitWindow
+            Duration rateLimitWindow,
+            boolean debug
     ) {
         this.bridge = Objects.requireNonNull(bridge, "bridge");
         this.dependencies = Objects.requireNonNull(dependencies, "dependencies");
@@ -66,6 +68,7 @@ public final class InternalCommandBuilder<S> {
         this.commandInstances = List.copyOf(Objects.requireNonNull(commandInstances, "commandInstances"));
         this.rateLimitCommands = rateLimitCommands;
         this.rateLimitWindow = Objects.requireNonNull(rateLimitWindow, "rateLimitWindow");
+        this.debug = debug;
     }
 
     public CommandFramework<S> build() {
@@ -112,15 +115,21 @@ public final class InternalCommandBuilder<S> {
                 String normalized = label.toLowerCase(Locale.ROOT);
                 CommandDefinition previous = labels.putIfAbsent(normalized, definition);
                 if (previous != null) {
-                    throw new IllegalStateException("Duplicate command label '" + normalized + "'");
+                    throw new IllegalStateException("Duplicate command label '" + normalized + "' — "
+                            + "declared by " + previous.instance().getClass().getName()
+                            + " and " + definition.instance().getClass().getName()
+                            + ". Rename one of them or drop the duplicate alias.");
                 }
             }
         }
 
         for (String confirmLabel : confirmationCommands) {
-            if (labels.containsKey(confirmLabel)) {
+            CommandDefinition owner = labels.get(confirmLabel);
+            if (owner != null) {
                 throw new IllegalStateException("Confirmation command '" + confirmLabel
-                        + "' collides with a registered command label");
+                        + "' collides with a registered command label in "
+                        + owner.instance().getClass().getName()
+                        + ". Change @Confirm(commandName=\"...\") on the affected executor.");
             }
         }
 
@@ -134,7 +143,8 @@ public final class InternalCommandBuilder<S> {
                 new CommandTokenizer(),
                 new CooldownManager(),
                 new ConfirmationManager(),
-                this.bridge.logger()
+                this.bridge.logger(),
+                this.debug
         );
 
         return new CommandFramework<>(
@@ -186,13 +196,16 @@ public final class InternalCommandBuilder<S> {
                     continue;
                 }
                 if (Modifier.isFinal(field.getModifiers())) {
-                    throw new IllegalStateException("@Inject fields cannot be final: " + field);
+                    throw new IllegalStateException("@Inject field cannot be final: "
+                            + current.getName() + "#" + field.getName()
+                            + ". Remove 'final' from the field modifier.");
                 }
 
                 Object dependency = this.dependencies.resolve(field.getType());
                 if (dependency == null) {
                     throw new IllegalStateException("No binding for " + field.getType().getName()
-                            + " required by " + instance.getClass().getName());
+                            + " required by @Inject field " + current.getName() + "#" + field.getName()
+                            + ". Register it via builder.bind(" + field.getType().getSimpleName() + ".class, instance).");
                 }
 
                 try {

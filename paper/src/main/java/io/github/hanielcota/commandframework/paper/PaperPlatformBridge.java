@@ -116,8 +116,9 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
 
     private LiteralArgumentBuilder<CommandSourceStack> confirmationNode(
             CommandFramework<CommandSender> framework,
-            String confirmationLabel
-    ) {
+            String confirmationLabel) {
+
+
         return Commands.literal(confirmationLabel)
                 .executes(context -> {
                     framework.dispatch(context.getSource().getSender(), confirmationLabel, "");
@@ -139,9 +140,11 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
 
     private void logRegistrationConflicts(Commands commands, String label, List<String> aliases, Set<String> registered) {
         Set<String> normalized = new LinkedHashSet<>();
+
         for (String value : registered) {
             normalized.add(value.toLowerCase(Locale.ROOT));
             int separatorIndex = value.indexOf(':');
+
             if (separatorIndex >= 0 && separatorIndex + 1 < value.length()) {
                 normalized.add(value.substring(separatorIndex + 1).toLowerCase(Locale.ROOT));
             }

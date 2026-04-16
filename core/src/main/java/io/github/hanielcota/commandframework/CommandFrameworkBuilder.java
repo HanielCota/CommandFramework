@@ -26,6 +26,7 @@ public abstract class CommandFrameworkBuilder<S, B extends CommandFrameworkBuild
     private int rateLimitCommands = 30;
     private Duration rateLimitWindow = Duration.ofSeconds(10);
     private boolean built;
+    private boolean debug;
 
     /**
      * Creates a new builder.
@@ -148,6 +149,19 @@ public abstract class CommandFrameworkBuilder<S, B extends CommandFrameworkBuild
     }
 
     /**
+     * Enables verbose dispatch logging. When on, the dispatcher emits a log line
+     * for each pipeline stage (permission check, cooldown, argument parse,
+     * confirmation, execution) plus total dispatch latency. Zero overhead when off.
+     *
+     * @param enabled whether to log pipeline stages
+     * @return this builder
+     */
+    public B debug(boolean enabled) {
+        this.debug = enabled;
+        return this.self();
+    }
+
+    /**
      * Builds and registers the framework.
      *
      * @return the built framework
@@ -167,7 +181,8 @@ public abstract class CommandFrameworkBuilder<S, B extends CommandFrameworkBuild
                 this.scanPackages,
                 this.commandInstances,
                 this.rateLimitCommands,
-                this.rateLimitWindow
+                this.rateLimitWindow,
+                this.debug
         ).build();
         this.bridge.register(framework);
         return framework;

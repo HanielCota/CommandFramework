@@ -36,6 +36,7 @@ public final class CommandDispatcher {
     private final CooldownManager cooldownManager;
     private final ConfirmationManager confirmationManager;
     private final Logger logger;
+    private final boolean debug;
     private final Map<Class<?>, ArgumentResolver<Object>> enumResolverCache = new ConcurrentHashMap<>();
 
     CommandDispatcher(
@@ -48,7 +49,8 @@ public final class CommandDispatcher {
             CommandTokenizer tokenizer,
             CooldownManager cooldownManager,
             ConfirmationManager confirmationManager,
-            Logger logger
+            Logger logger,
+            boolean debug
     ) {
         this.bridge = Objects.requireNonNull(bridge, "bridge");
         this.commandsByLabel = Map.copyOf(Objects.requireNonNull(commandsByLabel, "commandsByLabel"));
@@ -60,17 +62,26 @@ public final class CommandDispatcher {
         this.cooldownManager = Objects.requireNonNull(cooldownManager, "cooldownManager");
         this.confirmationManager = Objects.requireNonNull(confirmationManager, "confirmationManager");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.debug = debug;
     }
 
     public CommandResult dispatch(CommandActor actor, String label, String rawArguments) {
+        long startedNanos = this.debug ? System.nanoTime() : 0L;
         try {
             String normalizedLabel = label.toLowerCase(Locale.ROOT);
             if (this.confirmationCommands.contains(normalizedLabel)) {
-                return this.dispatchConfirmation(actor, normalizedLabel);
+                CommandResult result = this.dispatchConfirmation(actor, normalizedLabel);
+                if (this.debug) {
+                    this.traceDispatch(actor, label, "confirmation", result, startedNanos);
+                }
+                return result;
             }
 
             CommandDefinition command = this.commandsByLabel.get(normalizedLabel);
             if (command == null) {
+                if (this.debug) {
+                    this.traceDispatch(actor, label, "unknown", CommandResult.handled(), startedNanos);
+                }
                 return CommandResult.handled();
             }
 
@@ -83,7 +94,11 @@ public final class CommandDispatcher {
 
             CommandContext context = new CommandContext(actor, label, rawArguments, selection.argumentTokens(), selection.commandPath());
             CommandResult result = this.invokeMiddleware(0, context, ctx -> this.executeSelection(ctx.actor(), command, ctx.label(), selection));
-            return this.emit(actor, Objects.requireNonNull(result, "Middleware chain must not return null"));
+            CommandResult emitted = this.emit(actor, Objects.requireNonNull(result, "Middleware chain must not return null"));
+            if (this.debug) {
+                this.traceDispatch(actor, label, selection.commandPath(), emitted, startedNanos);
+            }
+            return emitted;
         } catch (MissingArgumentException exception) {
             this.messages.send(actor, MessageKey.MISSING_ARGUMENT, Map.of("name", exception.argumentName));
             return CommandResult.handled();
@@ -438,6 +453,14 @@ public final class CommandDispatcher {
 
     private boolean allowed(CommandActor actor, ExecutorDefinition executor) {
         return executor.permission().isBlank() || actor.hasPermission(executor.permission());
+    }
+
+    private void traceDispatch(CommandActor actor, String label, String path, CommandResult result, long startedNanos) {
+        long tookMicros = (System.nanoTime() - startedNanos) / 1_000L;
+        String resultName = result.getClass().getSimpleName();
+        this.logger.info(() -> "[cf] dispatch actor=" + actor.name()
+                + " label=" + label + " path=" + path
+                + " result=" + resultName + " tookUs=" + tookMicros);
     }
 
     private CommandResult emit(CommandActor actor, CommandResult result) {
