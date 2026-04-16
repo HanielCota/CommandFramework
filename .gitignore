@@ -1,0 +1,44 @@
+# Gradle
+.gradle/
+build/
+!**/src/**/build/
+out/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# IntelliJ inspection exports dropped at project root
+# (Annotator.xml, unused.xml, VulnerableLibrariesLocal.xml, etc.)
+/*.xml
+/.xml
+/.descriptions.xml
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# VS Code
+.vscode/
+
+# Claude Code CLI
+.claude/
+
+# IntelliJ inspection-export artifacts (also dropped at root)
+/script.js
+/styles.css
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local environment
+.env
+.env.local
