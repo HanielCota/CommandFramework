@@ -22,6 +22,7 @@ public final class DefaultMessageProvider implements MessageProvider {
             case NO_PERMISSION -> "<red>You do not have permission to use this command.";
             case INVALID_ARGUMENT -> "<red>Invalid value for {name}: {input}";
             case MISSING_ARGUMENT -> "<red>Missing argument: {name}";
+            case TOO_MANY_ARGUMENTS -> "<red>Too many arguments. Unexpected input: {input}";
             case COOLDOWN_ACTIVE -> "<red>You must wait {remaining} before using this command again.";
             case COMMAND_ERROR -> "<red>An unexpected error occurred while running this command.";
             case CONFIRM_PROMPT -> "<yellow>Run /{command} within {seconds}s to confirm.";

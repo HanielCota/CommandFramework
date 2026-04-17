@@ -1,4 +1,8 @@
 dependencies {
-    // Processor only depends on the annotation classes — no runtime deps needed.
-    implementation(project(":core"))
+    implementation(project(":annotations"))
+
+    testImplementation(project(":core"))
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }

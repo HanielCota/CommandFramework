@@ -8,5 +8,6 @@ dependencies {
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
+    testAnnotationProcessor(project(":processor"))
     testRuntimeOnly(libs.junit.platform.launcher)
 }

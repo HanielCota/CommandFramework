@@ -4,11 +4,11 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import io.github.hanielcota.commandframework.CommandActor;
+import io.github.hanielcota.commandframework.FrameworkLogger;
 
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.logging.Logger;
 
 /**
  * Fixed-window rate limiter keyed by sender UUID that allows up to {@code limit} invocations per
@@ -25,7 +25,7 @@ public final class RateLimiter {
 
     private final int limit;
     private final Duration window;
-    private final Logger logger;
+    private final FrameworkLogger logger;
     private final Cache<UUID, State> states = Caffeine.newBuilder()
             .expireAfter(new Expiry<UUID, State>() {
                 @Override
@@ -45,7 +45,7 @@ public final class RateLimiter {
             })
             .build();
 
-    public RateLimiter(int limit, Duration window, Logger logger) {
+    public RateLimiter(int limit, Duration window, FrameworkLogger logger) {
         this.limit = limit;
         this.window = Objects.requireNonNull(window, "window");
         this.logger = Objects.requireNonNull(logger, "logger");
@@ -74,7 +74,7 @@ public final class RateLimiter {
             return false;
         }
 
-        this.logger.fine(() -> "Silently rate-limited command execution for " + actor.name());
+        this.logger.debug("Silently rate-limited command execution for " + actor.name());
         return true;
     }
 

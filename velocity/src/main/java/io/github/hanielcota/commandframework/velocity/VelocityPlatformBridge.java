@@ -8,7 +8,14 @@ import com.velocitypowered.api.command.CommandMeta;
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
-import io.github.hanielcota.commandframework.*;
+import io.github.hanielcota.commandframework.ArgumentResolutionContext;
+import io.github.hanielcota.commandframework.ArgumentResolveException;
+import io.github.hanielcota.commandframework.ArgumentResolver;
+import io.github.hanielcota.commandframework.CommandActor;
+import io.github.hanielcota.commandframework.CommandFramework;
+import io.github.hanielcota.commandframework.FrameworkLogger;
+import io.github.hanielcota.commandframework.PlatformBridge;
+import io.github.hanielcota.commandframework.RegisteredCommand;
 import net.kyori.adventure.text.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -20,14 +27,18 @@ import java.util.logging.Logger;
 
 final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
 
+    // Velocity proxies Bedrock clients whose names include '.' and '*', so the resolver
+    // only enforces an upper bound and defers existence checks to the proxy lookup.
+    private static final int MAX_PLAYER_NAME_LENGTH = 32;
+
     private final ProxyServer server;
     private final Object plugin;
-    private final Logger logger;
+    private final FrameworkLogger logger;
 
     VelocityPlatformBridge(ProxyServer server, Object plugin) {
         this.server = server;
         this.plugin = plugin;
-        this.logger = Logger.getLogger(plugin.getClass().getName());
+        this.logger = FrameworkLogger.jul(Logger.getLogger(plugin.getClass().getName()));
     }
 
     @Override
@@ -41,7 +52,7 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
     }
 
     @Override
-    public Logger logger() {
+    public FrameworkLogger logger() {
         return this.logger;
     }
 
@@ -95,11 +106,7 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
         try {
             manager.register(meta, command);
         } catch (RuntimeException exception) {
-            this.logger.log(
-                    java.util.logging.Level.SEVERE,
-                    exception,
-                    () -> "Failed to register command '" + label + "' with the Velocity proxy"
-            );
+            this.logger.error("Failed to register command '" + label + "' with the Velocity proxy", exception);
         }
     }
 
@@ -146,10 +153,10 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
         Object owner = meta != null ? meta.getPlugin() : null;
         if (owner != null) {
             String ownerClassName = owner.getClass().getName();
-            this.logger.warning(() -> "Command registration conflict for '" + label + "' with " + ownerClassName);
+            this.logger.warn("Command registration conflict for '" + label + "' with " + ownerClassName);
             return;
         }
-        this.logger.warning(() -> "Command registration conflict for '" + label + "'");
+        this.logger.warn("Command registration conflict for '" + label + "'");
     }
 
     private static final class VelocityActor implements CommandActor {
@@ -207,10 +214,6 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
             return this.source;
         }
     }
-
-    // Velocity proxies Bedrock clients whose names include '.' and '*', so the resolver
-    // only enforces an upper bound and defers existence checks to the proxy lookup.
-    private static final int MAX_PLAYER_NAME_LENGTH = 32;
 
     private record VelocityPlayerResolver(ProxyServer server) implements ArgumentResolver<Player> {
         @Override

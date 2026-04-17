@@ -56,7 +56,7 @@
 
 ### JitPack (recommended)
 
-Add the repository and the modules you need:
+Add the repository, the platform module you need, and the annotation processor:
 
 ```kotlin
 // settings.gradle.kts
@@ -72,9 +72,10 @@ dependencyResolutionManagement {
 ```kotlin
 // build.gradle.kts
 dependencies {
-    // Pick the module matching your platform. core is included transitively.
+    // Pick the module matching your platform. core + annotations are included transitively.
     implementation("com.github.HanielCota.CommandFramework:paper:0.1.0")
     implementation("com.github.HanielCota.CommandFramework:velocity:0.1.0")
+    annotationProcessor("com.github.HanielCota.CommandFramework:processor:0.1.0")
 }
 ```
 
@@ -95,6 +96,7 @@ repositories {
 
 dependencies {
     implementation("io.github.hanielcota.commandframework:paper:0.1.0")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.1.0")
 }
 ```
 
@@ -116,7 +118,29 @@ GitHub Packages requires a token with `read:packages` scope even for public pack
         <artifactId>paper</artifactId>
         <version>0.1.0</version>
     </dependency>
+    <dependency>
+        <groupId>com.github.HanielCota.CommandFramework</groupId>
+        <artifactId>processor</artifactId>
+        <version>0.1.0</version>
+        <scope>provided</scope>
+    </dependency>
 </dependencies>
+```
+
+### Gradle plugin
+
+If you use the bundled Gradle plugin, it wires the platform dependency, Java 25 toolchain, and the annotation processor automatically:
+
+```kotlin
+plugins {
+    java
+    id("io.github.hanielcota.commandframework") version "0.1.0"
+}
+
+commandframework {
+    platform.set("paper") // or velocity / core
+    version.set("0.1.0")
+}
 ```
 
 ---
@@ -158,7 +182,7 @@ public final class MyProxyPlugin {
 }
 ```
 
-No `plugin.yml` `commands:` entries. No manual registration. The framework scans the package for annotated classes, builds them, and registers each one through the native Brigadier APIs.
+No `plugin.yml` `commands:` entries. No manual registration. `scanPackage(...)` loads compile-time generated command descriptors, instantiates the matching classes, and registers each one through the native Brigadier APIs.
 
 ### A complete command
 
@@ -496,7 +520,7 @@ All mutators are fluent (`return this`). `build()` finalises registration.
 
 | Method | Purpose |
 |---|---|
-| `scanPackage(String)` | Add a package to scan for `@Command` classes. |
+| `scanPackage(String)` | Add a package whose generated `@Command` descriptors should be auto-registered. Requires the annotation processor. |
 | `command(Object)` | Register a pre-instantiated command. |
 | `commands(Object...)` | Register several commands. |
 | `bind(Class<T>, T)` | Bind a dependency for `@Inject` / resolvers. |
@@ -530,8 +554,8 @@ All mutators are fluent (`return this`). `build()` finalises registration.
 |              CommandFrameworkBuilder (core)         |
 |                                                     |
 |  InternalCommandBuilder ----> CommandFramework<S>   |
-|     - scans classes                                 |
-|     - validates signatures                          |
+|     - loads generated descriptors                   |
+|     - validates metadata / signatures               |
 |     - injects fields                                |
 |     - builds CommandDispatcher                      |
 +-----------+-----------------------------------------+
@@ -553,12 +577,14 @@ All mutators are fluent (`return this`). `build()` finalises registration.
 ### Module layout
 
 ```
-core/       Platform-agnostic: dispatcher, resolvers, managers, message service.
-paper/      PaperPlatformBridge + Brigadier via LifecycleEvents.COMMANDS.
-velocity/   VelocityPlatformBridge + BrigadierCommand via CommandManager.
+annotations/ Public annotation API shared by commands and the processor.
+core/        Platform-agnostic runtime: dispatcher, resolvers, managers, message service.
+paper/       PaperPlatformBridge + Brigadier via LifecycleEvents.COMMANDS.
+velocity/    VelocityPlatformBridge + BrigadierCommand via CommandManager.
+processor/   Compile-time validator + generated command descriptors.
 ```
 
-Both `paper` and `velocity` ship as shadow jars with Caffeine and ClassGraph relocated to `io.github.hanielcota.commandframework.libs.*` to avoid classpath clashes.
+Both `paper` and `velocity` ship as shadow jars with Caffeine relocated to `io.github.hanielcota.commandframework.libs.*` to avoid classpath clashes.
 
 ---
 
@@ -570,7 +596,7 @@ The core is tested in isolation with a `TestBridge` + `TestPlayer` fixture. Pape
 ./gradlew test
 ```
 
-As of 0.1.0: **86 tests** (59 core, 13 paper, 14 velocity). Coverage includes every annotation, error path, cooldown/confirmation timing, rate limiting, and dispatcher semantics.
+Coverage includes runtime dispatch, generated descriptor loading, compile-time validation, cooldown/confirmation timing, rate limiting, and the Paper / Velocity adapters.
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for local setup, PR conventions, and release flow.
 
@@ -582,10 +608,11 @@ See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for local setup, PR conventions, and 
 |---|---|
 | Java | 25 (toolchain) |
 | Gradle | 9.4.1 (via wrapper) |
-| Paper API | `26.1.2.build.+` (MC 1.21+) |
+| Paper API | `26.1.2.build.7-alpha` (MC 1.21+) |
 | Velocity API | `3.4.0-SNAPSHOT` |
 | Adventure | 4.26.1 |
 | MiniMessage | Required at runtime (shipped non-transitively by the shadowed jar) |
+| Annotation processing | Required for `scanPackage(...)` and compile-time command validation |
 
 Paper plugins must be built against the modern Paper API (Brigadier lifecycle events) — legacy `JavaPlugin.getCommand(...)` is not used.
 

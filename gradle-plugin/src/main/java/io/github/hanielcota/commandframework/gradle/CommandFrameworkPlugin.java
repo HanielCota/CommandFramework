@@ -2,8 +2,9 @@ package io.github.hanielcota.commandframework.gradle;
 
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
-import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
+import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.Provider;
 import org.gradle.jvm.toolchain.JavaLanguageVersion;
 
 /**
@@ -25,7 +26,6 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion;
  *
  * <p>The plugin then:
  * <ul>
- *   <li>Adds the PaperMC Maven repository and JitPack.</li>
  *   <li>Sets the Java toolchain to 25.</li>
  *   <li>Adds the chosen CommandFramework module as an {@code implementation} dependency.</li>
  *   <li>Adds the CommandFramework annotation processor.</li>
@@ -38,21 +38,9 @@ public final class CommandFrameworkPlugin implements Plugin<Project> {
         CommandFrameworkExtension extension = project.getExtensions()
                 .create("commandframework", CommandFrameworkExtension.class);
 
-        this.registerRepositories(project);
-        this.configureToolchain(project);
-
-        project.afterEvaluate(evaluated -> this.wireDependencies(evaluated, extension));
-    }
-
-    private void registerRepositories(Project project) {
-        project.getRepositories().mavenCentral();
-        project.getRepositories().maven((MavenArtifactRepository repo) -> {
-            repo.setName("PaperMC");
-            repo.setUrl("https://repo.papermc.io/repository/maven-public/");
-        });
-        project.getRepositories().maven((MavenArtifactRepository repo) -> {
-            repo.setName("JitPack");
-            repo.setUrl("https://jitpack.io");
+        project.getPlugins().withType(JavaPlugin.class, ignored -> {
+            this.configureToolchain(project);
+            this.wireDependencies(project, extension);
         });
     }
 
@@ -64,17 +52,26 @@ public final class CommandFrameworkPlugin implements Plugin<Project> {
     }
 
     private void wireDependencies(Project project, CommandFrameworkExtension extension) {
-        String platform = extension.getPlatform().getOrElse("paper");
-        String version = extension.getVersion().getOrElse("0.1.0");
-        String module = switch (platform.toLowerCase(java.util.Locale.ROOT)) {
-            case "paper", "velocity", "core" -> platform.toLowerCase(java.util.Locale.ROOT);
+        Provider<String> module = extension.getPlatform()
+                .orElse("paper")
+                .map(this::normalizePlatform);
+        Provider<String> version = extension.getVersion().orElse("0.1.0");
+        Provider<String> coordinate = module.zip(version,
+                (platform, resolvedVersion) -> "com.github.HanielCota.CommandFramework:"
+                        + platform + ":" + resolvedVersion);
+        Provider<String> processorCoordinate = version.map(resolvedVersion ->
+                "com.github.HanielCota.CommandFramework:processor:" + resolvedVersion);
+
+        project.getDependencies().addProvider(JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME, coordinate);
+        project.getDependencies().addProvider(JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME, processorCoordinate);
+    }
+
+    private String normalizePlatform(String platform) {
+        String normalized = platform.toLowerCase(java.util.Locale.ROOT);
+        return switch (normalized) {
+            case "paper", "velocity", "core" -> normalized;
             default -> throw new IllegalArgumentException(
                     "commandframework.platform must be one of: paper, velocity, core — got: " + platform);
         };
-        String coordinate = "com.github.HanielCota.CommandFramework:" + module + ":" + version;
-        String processorCoordinate = "com.github.HanielCota.CommandFramework:processor:" + version;
-
-        project.getDependencies().add("implementation", coordinate);
-        project.getDependencies().add("annotationProcessor", processorCoordinate);
     }
 }

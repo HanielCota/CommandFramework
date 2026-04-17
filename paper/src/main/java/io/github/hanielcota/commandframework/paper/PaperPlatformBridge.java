@@ -5,7 +5,14 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
-import io.github.hanielcota.commandframework.*;
+import io.github.hanielcota.commandframework.ArgumentResolutionContext;
+import io.github.hanielcota.commandframework.ArgumentResolveException;
+import io.github.hanielcota.commandframework.ArgumentResolver;
+import io.github.hanielcota.commandframework.CommandActor;
+import io.github.hanielcota.commandframework.CommandFramework;
+import io.github.hanielcota.commandframework.FrameworkLogger;
+import io.github.hanielcota.commandframework.PlatformBridge;
+import io.github.hanielcota.commandframework.RegisteredCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
@@ -18,17 +25,26 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.logging.Logger;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
 
 final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
 
+    // Bedrock/Floodgate usernames legitimately include '.' and '*', so the resolver
+    // only enforces an upper bound and defers existence checks to the server lookup.
+    private static final int MAX_PLAYER_NAME_LENGTH = 32;
+
     private final JavaPlugin plugin;
     private final Server server;
+    private final FrameworkLogger logger;
 
     PaperPlatformBridge(JavaPlugin plugin) {
         this.plugin = plugin;
         this.server = plugin.getServer();
+        this.logger = FrameworkLogger.jul(plugin.getLogger());
     }
 
     @Override
@@ -42,8 +58,8 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
     }
 
     @Override
-    public Logger logger() {
-        return this.plugin.getLogger();
+    public FrameworkLogger logger() {
+        return this.logger;
     }
 
     @Override
@@ -117,8 +133,6 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
     private LiteralArgumentBuilder<CommandSourceStack> confirmationNode(
             CommandFramework<CommandSender> framework,
             String confirmationLabel) {
-
-
         return Commands.literal(confirmationLabel)
                 .executes(context -> {
                     framework.dispatch(context.getSource().getSender(), confirmationLabel, "");
@@ -151,11 +165,11 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
         }
 
         if (!normalized.contains(label.toLowerCase(Locale.ROOT))) {
-            this.logger().warning("Command registration conflict for '" + label + "'" + this.conflictDetails(commands, label));
+            this.logger().warn("Command registration conflict for '" + label + "'" + this.conflictDetails(commands, label));
         }
         for (String alias : aliases) {
             if (!normalized.contains(alias.toLowerCase(Locale.ROOT))) {
-                this.logger().warning("Command alias registration conflict for '" + alias + "'" + this.conflictDetails(commands, alias));
+                this.logger().warn("Command alias registration conflict for '" + alias + "'" + this.conflictDetails(commands, alias));
             }
         }
     }
@@ -231,10 +245,6 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
             return this.sender;
         }
     }
-
-    // Bedrock/Floodgate usernames legitimately include '.' and '*', so the resolver
-    // only enforces an upper bound and defers existence checks to the server lookup.
-    private static final int MAX_PLAYER_NAME_LENGTH = 32;
 
     private record PaperPlayerResolver(Server server) implements ArgumentResolver<Player> {
         @Override

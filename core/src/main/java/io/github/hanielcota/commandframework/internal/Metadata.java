@@ -1,9 +1,11 @@
 package io.github.hanielcota.commandframework.internal;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Immutable metadata records shared across the framework internals: the compiled representation of
@@ -41,7 +43,7 @@ record CommandDefinition(
 }
 
 record ExecutorDefinition(
-        Method method,
+        CommandInvoker invoker,
         String subcommand,
         String description,
         String permission,
@@ -52,7 +54,7 @@ record ExecutorDefinition(
         List<ParameterDefinition> parameters
 ) {
     ExecutorDefinition {
-        Objects.requireNonNull(method, "method");
+        Objects.requireNonNull(invoker, "invoker");
         Objects.requireNonNull(subcommand, "subcommand");
         Objects.requireNonNull(description, "description");
         Objects.requireNonNull(permission, "permission");
@@ -61,7 +63,6 @@ record ExecutorDefinition(
 }
 
 record ParameterDefinition(
-        Parameter parameter,
         String name,
         Class<?> rawType,
         Class<?> resolvedType,
@@ -73,12 +74,16 @@ record ParameterDefinition(
         int maxLength
 ) {
     ParameterDefinition {
-        Objects.requireNonNull(parameter, "parameter");
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(rawType, "rawType");
         Objects.requireNonNull(resolvedType, "resolvedType");
         Objects.requireNonNull(optionalValue, "optionalValue");
     }
+}
+
+@FunctionalInterface
+interface CommandInvoker {
+    Object invoke(Object instance, Object... arguments) throws Throwable;
 }
 
 record CooldownDefinition(Duration duration, String bypassPermission) {

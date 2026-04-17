@@ -5,7 +5,12 @@ import io.github.hanielcota.commandframework.ArgumentResolveException;
 import io.github.hanielcota.commandframework.ArgumentResolver;
 import io.github.hanielcota.commandframework.CommandActor;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 /**

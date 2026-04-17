@@ -1,18 +1,24 @@
 plugins {
     `java-library`
-    id("com.gradleup.shadow") version "9.3.2"
+    alias(libs.plugins.shadow)
+    id("io.github.hanielcota.commandframework")
 }
 
 group = "com.example"
 version = "1.0.0"
+val commandFrameworkVersion = "0.1.0"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(25))
 }
 
+commandframework {
+    platform.set("paper")
+    version.set(commandFrameworkVersion)
+}
+
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
-    implementation("com.github.HanielCota.CommandFramework:paper:0.1.0")
+    compileOnly(libs.paper.api)
 }
 
 tasks.processResources {

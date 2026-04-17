@@ -7,12 +7,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
 class VelocityCommandFrameworkTest {
 
-    private final Object plugin = new TestPlugin();
+    private final Object plugin = new PluginStub();
     @Mock
     private ProxyServer server;
 
@@ -45,6 +47,6 @@ class VelocityCommandFrameworkTest {
         assertThrows(NullPointerException.class, () -> VelocityCommandFramework.velocity(this.server, null));
     }
 
-    private static final class TestPlugin {
+    private static final class PluginStub {
     }
 }

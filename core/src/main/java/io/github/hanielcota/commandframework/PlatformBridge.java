@@ -1,7 +1,6 @@
 package io.github.hanielcota.commandframework;
 
 import java.util.List;
-import java.util.logging.Logger;
 
 /**
  * Supplies platform-specific behavior required by the shared framework.
@@ -29,7 +28,7 @@ public interface PlatformBridge<S> {
      *
      * @return the framework logger
      */
-    Logger logger();
+    FrameworkLogger logger();
 
     /**
      * Creates a platform-neutral actor wrapper.

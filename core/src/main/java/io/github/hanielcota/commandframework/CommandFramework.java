@@ -1,6 +1,10 @@
 package io.github.hanielcota.commandframework;
 
-import io.github.hanielcota.commandframework.internal.*;
+import io.github.hanielcota.commandframework.internal.CommandDispatcher;
+import io.github.hanielcota.commandframework.internal.ConfirmationManager;
+import io.github.hanielcota.commandframework.internal.CooldownManager;
+import io.github.hanielcota.commandframework.internal.MessageService;
+import io.github.hanielcota.commandframework.internal.RateLimiter;
 
 import java.util.List;
 import java.util.Objects;

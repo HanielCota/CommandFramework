@@ -5,7 +5,11 @@ import io.github.hanielcota.commandframework.internal.DependencyContainer;
 import io.github.hanielcota.commandframework.internal.InternalCommandBuilder;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Base builder used by platform integrations.
@@ -23,6 +27,7 @@ public abstract class CommandFrameworkBuilder<S, B extends CommandFrameworkBuild
     private final List<String> scanPackages = new ArrayList<>();
     private final List<Object> commandInstances = new ArrayList<>();
     private MessageProvider messageProvider = new DefaultMessageProvider();
+    private AsyncExecutor asyncExecutor = AsyncExecutor.virtualThreads();
     private int rateLimitCommands = 30;
     private Duration rateLimitWindow = Duration.ofSeconds(10);
     private boolean built;
@@ -133,6 +138,17 @@ public abstract class CommandFrameworkBuilder<S, B extends CommandFrameworkBuild
     }
 
     /**
+     * Replaces the async execution strategy used by {@code @Async} executors.
+     *
+     * @param executor the executor strategy
+     * @return this builder
+     */
+    public B asyncExecutor(AsyncExecutor executor) {
+        this.asyncExecutor = Objects.requireNonNull(executor, "executor");
+        return this.self();
+    }
+
+    /**
      * Configures the global player command rate limit.
      *
      * @param commands the maximum commands allowed in the window
@@ -143,8 +159,11 @@ public abstract class CommandFrameworkBuilder<S, B extends CommandFrameworkBuild
         if (commands <= 0) {
             throw new IllegalArgumentException("commands must be > 0");
         }
+        if (Objects.requireNonNull(window, "window").isZero() || window.isNegative()) {
+            throw new IllegalArgumentException("window must be > 0");
+        }
         this.rateLimitCommands = commands;
-        this.rateLimitWindow = Objects.requireNonNull(window, "window");
+        this.rateLimitWindow = window;
         return this.self();
     }
 
@@ -178,6 +197,7 @@ public abstract class CommandFrameworkBuilder<S, B extends CommandFrameworkBuild
                 this.messageOverrides,
                 this.resolvers,
                 this.middlewares,
+                this.asyncExecutor,
                 this.scanPackages,
                 this.commandInstances,
                 this.rateLimitCommands,

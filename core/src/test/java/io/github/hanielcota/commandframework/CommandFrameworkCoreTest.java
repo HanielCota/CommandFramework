@@ -1,22 +1,41 @@
 package io.github.hanielcota.commandframework;
 
-import io.github.hanielcota.commandframework.annotation.*;
+import io.github.hanielcota.commandframework.annotation.Async;
+import io.github.hanielcota.commandframework.annotation.Command;
+import io.github.hanielcota.commandframework.annotation.Confirm;
+import io.github.hanielcota.commandframework.annotation.Cooldown;
+import io.github.hanielcota.commandframework.annotation.Description;
+import io.github.hanielcota.commandframework.annotation.Execute;
+import io.github.hanielcota.commandframework.annotation.Inject;
 import io.github.hanielcota.commandframework.annotation.Optional;
+import io.github.hanielcota.commandframework.annotation.Permission;
+import io.github.hanielcota.commandframework.annotation.RequirePlayer;
+import io.github.hanielcota.commandframework.annotation.Sender;
 import io.github.hanielcota.commandframework.scanfixtures.ManualFixtureCommand;
 import net.kyori.adventure.text.Component;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Logger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings({"DoNotCallSuggester", "EffectivelyPrivate", "UnusedMethod", "UnusedVariable"})
 class CommandFrameworkCoreTest {
 
     private TestEnvironment environment;
@@ -46,6 +65,19 @@ class CommandFrameworkCoreTest {
 
         assertInstanceOf(CommandResult.Success.class, result);
         assertEquals("Haniel", command.lastUsername);
+    }
+
+    @Test
+    void unexpectedExtraArgumentsAreRejected() {
+        RootCommand command = new RootCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestPlayer player = this.environment.player("Alice");
+
+        CommandResult result = framework.dispatch(player, "root", "extra");
+
+        assertInstanceOf(CommandResult.Handled.class, result);
+        assertEquals(0, command.calls.get());
+        assertTrue(player.lastMessage().contains("Too many arguments"));
     }
 
     @Test
@@ -116,6 +148,23 @@ class CommandFrameworkCoreTest {
         assertInstanceOf(CommandResult.Success.class, confirmed);
         assertEquals(1, command.calls.get());
         assertEquals("target", command.lastTarget);
+    }
+
+    @Test
+    void confirmationRechecksPermissionBeforeExecution() {
+        ProtectedConfirmCommand command = new ProtectedConfirmCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestPlayer player = this.environment.player("Alice");
+        player.grant("secure.use");
+
+        CommandResult pending = framework.dispatch(player, "secure", "");
+        player.revoke("secure.use");
+        CommandResult confirmed = framework.dispatch(player, "confirm", "");
+
+        assertInstanceOf(CommandResult.PendingConfirmation.class, pending);
+        assertInstanceOf(CommandResult.NoPermission.class, confirmed);
+        assertEquals(0, command.calls.get());
+        assertTrue(player.lastMessage().contains("permission"));
     }
 
     @Test
@@ -191,6 +240,17 @@ class CommandFrameworkCoreTest {
     }
 
     @Test
+    void tabCompleteStopsAfterLastArgument() {
+        RootSuggestionCommand command = new RootSuggestionCommand();
+        CommandFramework<TestSender> framework =
+                this.framework(builder -> builder.resolver(new SuggestionValueResolver()), command);
+
+        List<String> suggestions = framework.suggest(this.environment.player("Alice"), "rootsuggest", "alpha ");
+
+        assertEquals(List.of(), suggestions);
+    }
+
+    @Test
     void invalidArgumentSendsMessageAndDoesNotExecute() {
         NumberCommand command = new NumberCommand();
         CommandFramework<TestSender> framework = this.framework(command);
@@ -245,6 +305,21 @@ class CommandFrameworkCoreTest {
     }
 
     @Test
+    void playerSenderParameterImplicitlyRequiresPlayer() {
+        ConfirmCommand command = new ConfirmCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestConsole console = this.environment.console("Console");
+
+        CommandResult result = framework.dispatch(console, "danger", "reset target");
+        List<String> suggestions = framework.suggest(console, "danger", "");
+
+        assertInstanceOf(CommandResult.PlayerOnly.class, result);
+        assertEquals(List.of(), suggestions);
+        assertEquals(0, command.calls.get());
+        assertTrue(console.lastMessage().contains("Only players"));
+    }
+
+    @Test
     void noPermissionSendsMessageAndDoesNotExecute() {
         PermissionCommand command = new PermissionCommand();
         CommandFramework<TestSender> framework = this.framework(command);
@@ -278,18 +353,6 @@ class CommandFrameworkCoreTest {
     }
 
     @Test
-    void invalidReturnTypeFailsFast() {
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> this.framework(new InvalidReturnCommand()));
-        assertTrue(exception.getMessage().contains("Invalid return type"));
-    }
-
-    @Test
-    void asyncPlatformSenderFailsFast() {
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> this.framework(new InvalidAsyncSenderCommand()));
-        assertTrue(exception.getMessage().contains("@Async sender parameters must use"));
-    }
-
-    @Test
     void cooldownDoubleClickAllowsOnlyOneExecution() throws Exception {
         CooldownCommand command = new CooldownCommand();
         CommandFramework<TestSender> framework = this.framework(command);
@@ -314,11 +377,12 @@ class CommandFrameworkCoreTest {
         framework.dispatch(player, "danger", "reset once");
 
         try (var executor = Executors.newFixedThreadPool(2)) {
-            executor.submit(() -> framework.dispatch(player, "confirm", ""));
-            executor.submit(() -> framework.dispatch(player, "confirm", ""));
+            var first = executor.submit(() -> framework.dispatch(player, "confirm", ""));
+            var second = executor.submit(() -> framework.dispatch(player, "confirm", ""));
+            first.get();
+            second.get();
         }
 
-        Thread.sleep(200L);
         assertEquals(1, command.calls.get());
     }
 
@@ -693,28 +757,12 @@ class CommandFrameworkCoreTest {
     }
 
     @Test
-    void commandWithSpacesInNameFailsFast() {
-        assertThrows(IllegalStateException.class, () -> this.framework(new BadNameCommand()));
-    }
-
-    @Test
-    void commandWithEmptyNameFailsFast() {
-        assertThrows(IllegalStateException.class, () -> this.framework(new EmptyNameCommand()));
-    }
-
-    @Test
-    void zeroCooldownValueFailsFast() {
-        assertThrows(IllegalStateException.class, () -> this.framework(new ZeroCooldownCommand()));
-    }
-
-    @Test
-    void zeroConfirmExpireFailsFast() {
-        assertThrows(IllegalStateException.class, () -> this.framework(new ZeroConfirmCommand()));
-    }
-
-    @Test
-    void zeroMaxLengthFailsFast() {
-        assertThrows(IllegalStateException.class, () -> this.framework(new ZeroMaxLenCommand()));
+    void rateLimitRejectsNonPositiveWindow() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> this.framework(builder -> builder.rateLimit(1, Duration.ZERO), new RootCommand())
+        );
+        assertTrue(exception.getMessage().contains("window"));
     }
 
     @Test
@@ -773,8 +821,8 @@ class CommandFrameworkCoreTest {
         }
 
         @Override
-        public Logger logger() {
-            return Logger.getLogger("CommandFrameworkTest");
+        public FrameworkLogger logger() {
+            return FrameworkLogger.jul(java.util.logging.Logger.getLogger("CommandFrameworkTest"));
         }
 
         @Override
@@ -913,6 +961,10 @@ class CommandFrameworkCoreTest {
             this.permissions.add(permission);
         }
 
+        void revoke(String permission) {
+            this.permissions.remove(permission);
+        }
+
         String lastMessage() {
             return this.messages.isEmpty() ? "" : this.messages.get(this.messages.size() - 1);
         }
@@ -1047,6 +1099,18 @@ class CommandFrameworkCoreTest {
         public void reset(@Sender TestPlayer player, String target) {
             this.calls.incrementAndGet();
             this.lastTarget = target;
+        }
+    }
+
+    @Command(name = "secure")
+    private static final class ProtectedConfirmCommand {
+        private final AtomicInteger calls = new AtomicInteger();
+
+        @Execute
+        @Permission("secure.use")
+        @Confirm(expireSeconds = 5)
+        public void execute(@Sender TestPlayer player) {
+            this.calls.incrementAndGet();
         }
     }
 
@@ -1213,22 +1277,6 @@ class CommandFrameworkCoreTest {
     }
 
     // ── New tests ──────────────────────────────────────────────────────
-
-    @Command(name = "invalid")
-    private static final class InvalidReturnCommand {
-        @Execute
-        public String execute() {
-            return "invalid";
-        }
-    }
-
-    @Command(name = "invalidasyncsender")
-    private static final class InvalidAsyncSenderCommand {
-        @Execute
-        @Async
-        public void execute(@Sender TestPlayer player) {
-        }
-    }
 
     @Command(name = "inject")
     private static final class MissingBindingCommand {
@@ -1399,43 +1447,6 @@ class CommandFrameworkCoreTest {
         @Execute
         @Confirm(expireSeconds = 5, commandName = "collide")
         public void execute(@Sender TestPlayer player) {
-        }
-    }
-
-    @Command(name = "badname space")
-    private static final class BadNameCommand {
-        @Execute
-        public void execute() {
-        }
-    }
-
-    @Command(name = "")
-    private static final class EmptyNameCommand {
-        @Execute
-        public void execute() {
-        }
-    }
-
-    @Command(name = "zerocool")
-    private static final class ZeroCooldownCommand {
-        @Execute
-        @Cooldown(value = 0, unit = TimeUnit.SECONDS)
-        public void execute() {
-        }
-    }
-
-    @Command(name = "zeroconfirm")
-    private static final class ZeroConfirmCommand {
-        @Execute
-        @Confirm(expireSeconds = 0)
-        public void execute(@Sender TestPlayer p) {
-        }
-    }
-
-    @Command(name = "zeromaxlen")
-    private static final class ZeroMaxLenCommand {
-        @Execute
-        public void execute(@io.github.hanielcota.commandframework.annotation.Arg(maxLength = 0) String v) {
         }
     }
 

@@ -4,19 +4,14 @@ import io.github.hanielcota.commandframework.CommandActor;
 import io.github.hanielcota.commandframework.MessageKey;
 import io.github.hanielcota.commandframework.MessageProvider;
 import net.kyori.adventure.text.Component;
-
-import java.lang.reflect.Method;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Formats framework messages using {@link MessageProvider} templates and an optional MiniMessage
- * parser, falling back to plain-text {@link Component} construction when MiniMessage is not
- * present on the runtime classpath.
- *
- * <p>The MiniMessage parser is resolved reflectively exactly once at construction, keeping the
- * framework usable on platforms that ship an older Adventure build without MiniMessage.
+ * Formats framework messages using {@link MessageProvider} templates and a MiniMessage parser.
  *
  * <p><b>Thread-safety:</b> once constructed, all state is effectively immutable and the service is
  * safe for concurrent use. Placeholder substitution creates per-call maps and does not share
@@ -27,11 +22,11 @@ public final class MessageService {
     private static final long SECONDS_PER_MINUTE = 60L;
 
     private final MessageProvider provider;
-    private final MiniMessageParser miniMessageParser;
+    private final MiniMessage miniMessage;
 
     public MessageService(MessageProvider provider) {
         this.provider = Objects.requireNonNull(provider, "provider");
-        this.miniMessageParser = this.loadMiniMessageParser();
+        this.miniMessage = MiniMessage.miniMessage();
     }
 
     public String template(MessageKey key) {
@@ -57,7 +52,7 @@ public final class MessageService {
 
     public Component render(MessageKey key, Map<String, String> placeholders) {
         String rendered = this.applyPlaceholders(this.template(key), placeholders);
-        return this.miniMessageParser.parse(rendered);
+        return this.miniMessage.deserialize(rendered, TagResolver.empty());
     }
 
     public Component renderLines(Component... lines) {
@@ -92,32 +87,4 @@ public final class MessageService {
         return result;
     }
 
-    private MiniMessageParser loadMiniMessageParser() {
-        try {
-            Class<?> miniMessageClass = Class.forName("net.kyori.adventure.text.minimessage.MiniMessage");
-            Class<?> tagResolverClass = Class.forName("net.kyori.adventure.text.minimessage.tag.resolver.TagResolver");
-            Method miniMessageFactory = miniMessageClass.getMethod("miniMessage");
-            Method emptyTagResolverFactory = tagResolverClass.getMethod("empty");
-            Object miniMessage = miniMessageFactory.invoke(null);
-            Object emptyTagResolver = emptyTagResolverFactory.invoke(null);
-            Method deserialize = miniMessageClass.getMethod("deserialize", String.class, tagResolverClass);
-            return input -> {
-                try {
-                    return (Component) deserialize.invoke(miniMessage, input, emptyTagResolver);
-                } catch (ReflectiveOperationException exception) {
-                    throw new IllegalStateException("Unable to parse MiniMessage input", exception);
-                }
-            };
-        } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException(
-                    "MiniMessage runtime is required. Add net.kyori:adventure-text-minimessage to the runtime classpath.",
-                    exception
-            );
-        }
-    }
-
-    @FunctionalInterface
-    private interface MiniMessageParser {
-        Component parse(String input);
-    }
 }

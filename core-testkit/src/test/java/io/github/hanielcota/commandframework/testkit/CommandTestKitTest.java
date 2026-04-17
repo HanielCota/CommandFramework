@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.kyori.adventure.text.Component;
 import org.junit.jupiter.api.Test;
 
+@SuppressWarnings({"EffectivelyPrivate", "UnusedMethod", "UnusedVariable"})
 class CommandTestKitTest {
 
     @Test

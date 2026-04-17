@@ -11,7 +11,7 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.mockito.core)
-    testImplementation("org.mockito:mockito-junit-jupiter:5.22.0")
+    testImplementation(libs.mockito.junit.jupiter)
     testImplementation(libs.velocity.api)
 
     mockitoAgent(libs.mockito.core) { isTransitive = false }

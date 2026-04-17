@@ -1,14 +1,28 @@
 package io.github.hanielcota.commandframework.internal;
 
-import io.github.hanielcota.commandframework.*;
+import io.github.hanielcota.commandframework.ArgumentResolutionContext;
+import io.github.hanielcota.commandframework.ArgumentResolveException;
+import io.github.hanielcota.commandframework.ArgumentResolver;
+import io.github.hanielcota.commandframework.AsyncExecutor;
+import io.github.hanielcota.commandframework.CommandActor;
+import io.github.hanielcota.commandframework.CommandContext;
+import io.github.hanielcota.commandframework.CommandMiddleware;
+import io.github.hanielcota.commandframework.CommandResult;
+import io.github.hanielcota.commandframework.FrameworkLogger;
+import io.github.hanielcota.commandframework.MessageKey;
+import io.github.hanielcota.commandframework.PlatformBridge;
 import net.kyori.adventure.text.Component;
 
-import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Pipeline orchestrator that dispatches a parsed command invocation through its stages:
@@ -35,7 +49,8 @@ public final class CommandDispatcher {
     private final CommandTokenizer tokenizer;
     private final CooldownManager cooldownManager;
     private final ConfirmationManager confirmationManager;
-    private final Logger logger;
+    private final FrameworkLogger logger;
+    private final AsyncExecutor asyncExecutor;
     private final boolean debug;
     private final Map<Class<?>, ArgumentResolver<Object>> enumResolverCache = new ConcurrentHashMap<>();
 
@@ -49,7 +64,8 @@ public final class CommandDispatcher {
             CommandTokenizer tokenizer,
             CooldownManager cooldownManager,
             ConfirmationManager confirmationManager,
-            Logger logger,
+            FrameworkLogger logger,
+            AsyncExecutor asyncExecutor,
             boolean debug
     ) {
         this.bridge = Objects.requireNonNull(bridge, "bridge");
@@ -62,6 +78,7 @@ public final class CommandDispatcher {
         this.cooldownManager = Objects.requireNonNull(cooldownManager, "cooldownManager");
         this.confirmationManager = Objects.requireNonNull(confirmationManager, "confirmationManager");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.asyncExecutor = Objects.requireNonNull(asyncExecutor, "asyncExecutor");
         this.debug = debug;
     }
 
@@ -102,10 +119,13 @@ public final class CommandDispatcher {
         } catch (MissingArgumentException exception) {
             this.messages.send(actor, MessageKey.MISSING_ARGUMENT, Map.of("name", exception.argumentName));
             return CommandResult.handled();
+        } catch (TooManyArgumentsException exception) {
+            this.messages.send(actor, MessageKey.TOO_MANY_ARGUMENTS, Map.of("input", exception.input));
+            return CommandResult.handled();
         } catch (InvalidInputException exception) {
             return this.emit(actor, new CommandResult.InvalidArgs(exception.argumentName, exception.input));
         } catch (RuntimeException exception) {
-            this.logger.log(Level.SEVERE, "Unhandled command exception while dispatching " + label, exception);
+            this.logger.error("Unhandled command exception while dispatching " + label, exception);
             return this.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
         }
     }
@@ -116,10 +136,14 @@ public final class CommandDispatcher {
             return this.emit(actor, CommandResult.failure(MessageKey.CONFIRM_NOTHING_PENDING));
         }
         try {
+            CommandResult blocked = this.preflight(actor, invocation.executor());
+            if (blocked != null) {
+                return this.emit(actor, blocked);
+            }
             CommandResult result = this.executePrepared(actor, invocation);
             return this.emit(actor, result);
         } catch (RuntimeException exception) {
-            this.logger.log(Level.SEVERE, "Unhandled command exception while confirming " + label, exception);
+            this.logger.error("Unhandled command exception while confirming " + label, exception);
             return this.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
         }
     }
@@ -149,7 +173,7 @@ public final class CommandDispatcher {
             }
             return this.argumentSuggestions(actor, subcommand, tokenizedInput.tokens(), tokenizedInput.trailingSpace(), 1);
         } catch (RuntimeException exception) {
-            this.logger.log(Level.WARNING, "Exception during tab completion for " + label, exception);
+            this.logger.warn("Exception during tab completion for " + label, exception);
             return List.of();
         }
     }
@@ -209,11 +233,9 @@ public final class CommandDispatcher {
 
     private CommandResult executeSelection(CommandActor actor, CommandDefinition command, String label, Selection selection) {
         ExecutorDefinition executor = selection.executor();
-        if (executor.requirePlayer() && !actor.isPlayer()) {
-            return new CommandResult.PlayerOnly();
-        }
-        if (!executor.permission().isBlank() && !actor.hasPermission(executor.permission())) {
-            return new CommandResult.NoPermission(executor.permission());
+        CommandResult blocked = this.preflight(actor, executor);
+        if (blocked != null) {
+            return blocked;
         }
 
         // Cooldown is evaluated AFTER argument parsing so that a syntax error (MissingArgumentException /
@@ -277,6 +299,9 @@ public final class CommandDispatcher {
             resolvedValues.add(resolved);
             previousArguments.add(resolved);
         }
+        if (tokenIndex < selection.argumentTokens().size()) {
+            throw new TooManyArgumentsException(selection.argumentTokens().get(tokenIndex));
+        }
 
         return new PreparedInvocation(command, selection.executor(), label, selection.commandPath(), resolvedValues);
     }
@@ -324,12 +349,12 @@ public final class CommandDispatcher {
 
     private CommandResult executePrepared(CommandActor actor, PreparedInvocation invocation) {
         if (invocation.executor().async()) {
-            Thread.ofVirtual().name("commandframework-" + invocation.commandPath()).start(() -> {
+            this.asyncExecutor.execute(invocation.commandPath(), () -> {
                 try {
                     CommandResult result = this.invokeMethod(actor, invocation);
                     this.emit(actor, result);
-                } catch (Exception exception) {
-                    this.logger.log(Level.SEVERE, "Unhandled exception in async command " + invocation.commandPath(), exception);
+                } catch (Throwable exception) {
+                    this.logger.error("Unhandled exception in async command " + invocation.commandPath(), exception);
                 }
             });
             return CommandResult.success();
@@ -340,19 +365,15 @@ public final class CommandDispatcher {
     private CommandResult invokeMethod(CommandActor actor, PreparedInvocation invocation) {
         try {
             Object[] arguments = this.buildArguments(actor, invocation.executor(), invocation.preparedArguments());
-            Object result = invocation.executor().method().invoke(invocation.command().instance(), arguments);
+            Object result = invocation.executor().invoker().invoke(invocation.command().instance(), arguments);
             if (result == null) {
                 return CommandResult.success();
             }
             return (CommandResult) result;
         } catch (PlayerOnlySignal ignored) {
             return new CommandResult.PlayerOnly();
-        } catch (InvocationTargetException exception) {
-            Throwable cause = exception.getTargetException() != null ? exception.getTargetException() : exception;
-            this.logger.log(Level.SEVERE, "Unhandled command exception in " + invocation.commandPath(), cause);
-            return CommandResult.failure(MessageKey.COMMAND_ERROR);
-        } catch (ReflectiveOperationException exception) {
-            this.logger.log(Level.SEVERE, "Unable to invoke command " + invocation.commandPath(), exception);
+        } catch (Throwable exception) {
+            this.logger.error("Unhandled command exception in " + invocation.commandPath(), exception);
             return CommandResult.failure(MessageKey.COMMAND_ERROR);
         }
     }
@@ -440,7 +461,10 @@ public final class CommandDispatcher {
         if (consumed < 0) {
             consumed = 0;
         }
-        int parameterIndex = Math.min(consumed, arguments.size() - 1);
+        if (consumed >= arguments.size()) {
+            return List.of();
+        }
+        int parameterIndex = consumed;
         ParameterDefinition parameter = arguments.get(parameterIndex);
         if (parameter.greedy()) {
             return List.of();
@@ -452,13 +476,24 @@ public final class CommandDispatcher {
     }
 
     private boolean allowed(CommandActor actor, ExecutorDefinition executor) {
-        return executor.permission().isBlank() || actor.hasPermission(executor.permission());
+        return (!executor.requirePlayer() || actor.isPlayer())
+                && (executor.permission().isBlank() || actor.hasPermission(executor.permission()));
+    }
+
+    private CommandResult preflight(CommandActor actor, ExecutorDefinition executor) {
+        if (executor.requirePlayer() && !actor.isPlayer()) {
+            return new CommandResult.PlayerOnly();
+        }
+        if (!executor.permission().isBlank() && !actor.hasPermission(executor.permission())) {
+            return new CommandResult.NoPermission(executor.permission());
+        }
+        return null;
     }
 
     private void traceDispatch(CommandActor actor, String label, String path, CommandResult result, long startedNanos) {
         long tookMicros = (System.nanoTime() - startedNanos) / 1_000L;
         String resultName = result.getClass().getSimpleName();
-        this.logger.info(() -> "[cf] dispatch actor=" + actor.name()
+        this.logger.info("[cf] dispatch actor=" + actor.name()
                 + " label=" + label + " path=" + path
                 + " result=" + resultName + " tookUs=" + tookMicros);
     }
@@ -551,6 +586,19 @@ public final class CommandDispatcher {
         private InvalidInputException(String argumentName, String input, Throwable cause) {
             super(cause);
             this.argumentName = argumentName;
+            this.input = input;
+        }
+
+        @Override
+        public Throwable fillInStackTrace() {
+            return this;
+        }
+    }
+
+    private static final class TooManyArgumentsException extends RuntimeException {
+        private final String input;
+
+        private TooManyArgumentsException(String input) {
             this.input = input;
         }
 

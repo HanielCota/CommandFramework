@@ -9,9 +9,8 @@
 
     <rule ref="category/java/bestpractices.xml">
         <exclude name="GuardLogStatement"/>
-        <exclude name="JUnitTestContainsTooManyAsserts"/>
-        <exclude name="JUnitAssertionsShouldIncludeMessage"/>
-        <exclude name="JUnitTestsShouldIncludeAssert"/>
+        <exclude name="UnitTestContainsTooManyAsserts"/>
+        <exclude name="UnitTestAssertionsShouldIncludeMessage"/>
         <!--
           Flags Map<K,V> fields that already use the interface type and only fires because an
           initializer such as new LinkedHashMap<>() or new EnumMap<>(...) is used for insertion
@@ -23,8 +22,6 @@
 
     <rule ref="category/java/errorprone.xml">
         <exclude name="AvoidFieldNameMatchingMethodName"/>
-        <exclude name="BeanMembersShouldSerialize"/>
-        <exclude name="DataflowAnomalyAnalysis"/>
         <exclude name="AvoidLiteralsInIfCondition"/>
         <exclude name="AvoidDuplicateLiterals"/>
         <!--
@@ -33,6 +30,15 @@
           branch runs; rewriting to Optional<String> adds boxing with no readability gain.
         -->
         <exclude name="NullAssignment"/>
+        <!--
+          CommandDispatcher.invokeMethod and the async wrapper in executePrepared must contain ALL
+          failures from user-supplied command handlers (including Errors thrown by misbehaving
+          reflection/bytecode-generated code) so the platform scheduler thread is never killed.
+          RuntimeAccessFactory catches Throwable because MethodHandle.invoke declares `throws Throwable`
+          — narrowing is impossible without re-wrapping. All catches log and translate into a
+          typed CommandResult or IllegalStateException.
+        -->
+        <exclude name="AvoidCatchingThrowable"/>
     </rule>
 
     <rule ref="category/java/multithreading.xml">

@@ -6,6 +6,7 @@ import io.github.hanielcota.commandframework.CommandFramework;
 import io.github.hanielcota.commandframework.CommandFrameworkBuilder;
 import io.github.hanielcota.commandframework.CommandMiddleware;
 import io.github.hanielcota.commandframework.CommandResult;
+import io.github.hanielcota.commandframework.FrameworkLogger;
 import io.github.hanielcota.commandframework.MessageKey;
 import io.github.hanielcota.commandframework.PlatformBridge;
 import io.github.hanielcota.commandframework.RegisteredCommand;
@@ -150,7 +151,6 @@ public final class CommandTestKit {
     public static final class Builder {
         private final TestBridge bridge = new TestBridge();
         private final TestFrameworkBuilder inner = new TestFrameworkBuilder(this.bridge);
-        private boolean debug;
 
         private Builder() {
         }
@@ -221,7 +221,6 @@ public final class CommandTestKit {
          * @return this builder
          */
         public Builder debug(boolean enabled) {
-            this.debug = enabled;
             this.inner.debug(enabled);
             return this;
         }
@@ -256,11 +255,11 @@ public final class CommandTestKit {
      * invoke {@link CommandFramework#dispatch} directly.
      */
     static final class TestBridge implements PlatformBridge<TestSender> {
-        private final Logger logger = Logger.getLogger("CommandTestKit");
+        private final FrameworkLogger logger = FrameworkLogger.jul(Logger.getLogger("CommandTestKit"));
 
         @Override public ClassLoader classLoader() { return this.getClass().getClassLoader(); }
         @Override public String defaultScanPackage() { return ""; }
-        @Override public Logger logger() { return this.logger; }
+        @Override public FrameworkLogger logger() { return this.logger; }
         @Override public CommandActor createActor(TestSender sender) { return sender; }
 
         @Override
@@ -270,7 +269,7 @@ public final class CommandTestKit {
 
         @Override
         public boolean isPlayerSenderType(Class<?> type) {
-            return type == TestSender.class;
+            return false;
         }
 
         @Override

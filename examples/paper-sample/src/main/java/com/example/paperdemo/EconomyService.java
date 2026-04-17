@@ -3,6 +3,7 @@ package com.example.paperdemo;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Toy in-memory economy. In a real plugin this would hit a database or cache.
@@ -21,13 +22,22 @@ public final class EconomyService {
         if (amount <= 0.0D) {
             return false;
         }
-        return this.balances.compute(from, (ignored, current) -> {
+        AtomicBoolean transferred = new AtomicBoolean(false);
+        this.balances.compute(from, (ignored, current) -> {
             double now = current == null ? STARTING_BALANCE : current;
             if (now < amount) {
                 return now;
             }
-            this.balances.merge(to, amount, Double::sum);
+            transferred.set(true);
             return now - amount;
-        }) >= 0.0D;
+        });
+        if (!transferred.get()) {
+            return false;
+        }
+        this.balances.compute(to, (ignored, current) -> {
+            double balance = current == null ? STARTING_BALANCE : current;
+            return balance + amount;
+        });
+        return true;
     }
 }
