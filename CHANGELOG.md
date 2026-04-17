@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-17
+
 ### Added
 
 - **`annotations` module** — annotations extracted from `core` so the annotation
@@ -111,5 +113,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `guava:31.0.1-jre`, `snakeyaml:1.33`) are not shipped — `paper-api` is declared
   `compileOnly`.
 
-[Unreleased]: https://github.com/HanielCota/CommandFramework/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/HanielCota/CommandFramework/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/HanielCota/CommandFramework/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/HanielCota/CommandFramework/releases/tag/v0.1.0
