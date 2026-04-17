@@ -798,6 +798,38 @@ Legacy `JavaPlugin.getCommand(...)` is not used.
 
 ---
 
+## 🤖 Using with LLMs (Cursor, Copilot, Claude Code, ChatGPT)
+
+This repo ships an [`llms.txt`](./llms.txt) at the root — a dense, machine-readable
+summary of every public annotation, builder method, message key, and common
+recipe, following the [llms.txt convention](https://llmstxt.org). LLMs that index
+the repo pick it up automatically; you can also paste it into the chat context
+when you want deterministic suggestions.
+
+### Prompt template (copy-paste)
+
+> You are writing a Paper 1.21+ plugin using **CommandFramework 0.2.0**
+> (https://github.com/HanielCota/CommandFramework). Always import annotations
+> from `io.github.hanielcota.commandframework.annotation.*`. Use `@Command` on
+> classes, `@Execute` on methods, `@Sender Player` as the first parameter.
+> Never declare commands in `plugin.yml`. Never use `JavaPlugin.getCommand()`,
+> `CommandExecutor`, or `TabExecutor`. Messages are MiniMessage templates
+> (`<red>`, `<click:run_command:'/foo'>`). Use `@Async` for DB/HTTP — never
+> `Bukkit.getScheduler()`. For the full API reference, consult `llms.txt` at
+> the repository root. If a feature is missing from that reference, say so
+> instead of inventing annotations.
+
+### What `llms.txt` contains
+
+- Exhaustive annotation list with every attribute and default.
+- Full `MessageKey` enum with placeholder names.
+- Built-in argument resolvers and how to write a custom one.
+- Builder method reference with one-line descriptions.
+- Ten "common mistakes" that stop LLMs from hallucinating `@Route` / `@Handler` / `@Subcommand`.
+- Copy-paste recipes for injection, confirm, async, YAML-backed messages.
+
+---
+
 ## 🤝 Contributing
 
 - See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for local setup and PR conventions.

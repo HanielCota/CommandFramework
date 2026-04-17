@@ -1,0 +1,339 @@
+# CommandFramework — LLM reference
+
+> Version: 0.2.0 · Java 25 · Paper 1.21+ and Velocity 3.4 · MIT license
+> Full README: https://github.com/HanielCota/CommandFramework/blob/main/README.md
+> This file follows the llms.txt convention (https://llmstxt.org).
+
+CommandFramework is an annotation-driven command library for Paper and Velocity Minecraft plugins. You write a Java class with `@Command` and `@Execute`, call `.build()` once, and the framework registers the command through the native Brigadier lifecycle. It validates annotations at compile time, generates descriptor files, and dispatches with per-sender cooldowns, confirmations, rate limits, dependency injection, and middleware.
+
+## Invariants that LLMs must respect
+
+- Always import annotations from `io.github.hanielcota.commandframework.annotation.*`.
+- The **annotation processor** is required. Without it, `scanPackage(...)` finds nothing.
+- **Do NOT** declare commands in `plugin.yml` or `paper-plugin.yml`. The framework registers them directly.
+- **Do NOT** use legacy `JavaPlugin.getCommand(...)` or `CommandMap`. Paper 1.20.6+ Brigadier lifecycle only.
+- `@Sender` parameter must be the **first** parameter (or the first unambiguous sender type).
+- Only one `@Arg(greedy = true)` per method and it **must** be the last parameter.
+- `@Inject` fields must be non-`final`, non-`static`, and the bound type must be registered via `builder.bind(...)` (or be `JavaPlugin` / `ProxyServer`, both pre-bound).
+- Cooldowns are only recorded on successful execution — typo-friendly.
+- Placeholders use curly braces `{name}` and are substituted BEFORE MiniMessage parsing, so they can safely appear inside `<click>` / `<hover>` tags.
+
+## Installation (Gradle Kotlin DSL, Paper)
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://jitpack.io")
+}
+dependencies {
+    implementation("com.github.HanielCota.CommandFramework:paper:0.2.0")
+    annotationProcessor("com.github.HanielCota.CommandFramework:processor:0.2.0")
+}
+```
+
+For Velocity, swap `paper` for `velocity`.
+
+## Minimal working plugin (Paper)
+
+```java
+public final class MyPlugin extends JavaPlugin {
+    @Override public void onEnable() {
+        PaperCommandFramework.paper(this)
+            .scanPackage("com.example.myplugin.commands")
+            .build();
+    }
+}
+
+@Command(name = "heal")
+@Permission("myplugin.heal")
+public final class HealCommand {
+    @Execute public void run(@Sender Player player) {
+        player.setHealth(player.getMaxHealth());
+    }
+}
+```
+
+## Minimal working plugin (Velocity)
+
+```java
+@Plugin(id = "myplugin", name = "MyPlugin", version = "1.0.0")
+public final class MyProxyPlugin {
+    @Inject public MyProxyPlugin(ProxyServer server) {
+        VelocityCommandFramework.velocity(server, this)
+            .scanPackage("com.example.proxy.commands")
+            .build();
+    }
+}
+```
+
+## Annotations (exhaustive)
+
+```java
+// io.github.hanielcota.commandframework.annotation
+
+@Target(TYPE)    @Retention(RUNTIME)
+@interface Command {
+    String name();
+    String[] aliases() default {};
+    String description() default "";
+    String permission() default "";
+}
+
+@Target(METHOD)  @Retention(RUNTIME)
+@interface Execute { String sub() default ""; }  // "" = root; "foo" = /cmd foo; "foo bar" = /cmd foo bar
+
+@Target(PARAMETER) @Retention(RUNTIME)
+@interface Sender {}  // Marks the sender parameter. Implicit if the type is unambiguous.
+
+@Target(PARAMETER) @Retention(RUNTIME)
+@interface Arg {
+    String value() default "";           // Override inferred parameter name.
+    boolean greedy() default false;      // If true, consume rest of line as String. Must be last parameter.
+    int maxLength() default 256;         // Reject input longer than this. Must be > 0.
+}
+
+@Target(PARAMETER) @Retention(RUNTIME)
+@interface Optional {
+    String UNSET = "\0__commandframework_unset__\0";
+    String value() default UNSET;        // Default when arg missing. UNSET = no default (pure java.util.Optional<T>).
+}
+
+@Target({TYPE, METHOD}) @Retention(RUNTIME)
+@interface Permission { String value(); }
+
+@Target(METHOD) @Retention(RUNTIME)
+@interface Cooldown {
+    long value();
+    TimeUnit unit() default TimeUnit.SECONDS;
+    String bypassPermission() default "";
+}
+
+@Target(METHOD) @Retention(RUNTIME)
+@interface Confirm {
+    int expireSeconds();
+    String commandName();                 // Label the player types/clicks to confirm.
+}
+
+@Target({TYPE, METHOD}) @Retention(RUNTIME)
+@interface RequirePlayer {}               // Console is rejected with MessageKey.PLAYER_ONLY.
+
+@Target(METHOD) @Retention(RUNTIME)
+@interface Async {}                       // Executor runs on a virtual thread.
+
+@Target(FIELD)   @Retention(RUNTIME)
+@interface Inject {}                      // Field-level DI. Resolved from builder.bind(...).
+
+@Target(METHOD) @Retention(RUNTIME)
+@interface Description { String value(); } // Shown in auto-generated help.
+```
+
+## Builder API — `CommandFrameworkBuilder<S, B>`
+
+Returned by `PaperCommandFramework.paper(plugin)` or `VelocityCommandFramework.velocity(server, plugin)`. All methods return `this`.
+
+| Method | Notes |
+|---|---|
+| `scanPackage(String pkg)` | Scan a Java package for `@Command` classes. Uses generated descriptors — requires annotation processor. |
+| `command(Object instance)` | Register a single pre-built command. Use when DI happens outside the framework. |
+| `commands(Object... instances)` | Register several pre-built commands. |
+| `bind(Class<T> type, T instance)` | Register a service for `@Inject` and resolver constructors. |
+| `resolver(ArgumentResolver<?> r)` | Register a custom argument type. |
+| `middleware(CommandMiddleware m)` | Register a middleware (wraps every dispatch). |
+| `message(MessageKey k, String template)` | Override one message template. |
+| `messages(MessageProvider p)` | Replace the whole provider. Prefer `MessageProvider.fromStringMap(...)` for config-backed. |
+| `rateLimit(int commands, Duration window)` | Fixed-window limiter. Default 30 per 10s. Console exempt. |
+| `debug(boolean on)` | Log each dispatch phase. |
+| `build()` | Validate, register, return `CommandFramework<S>`. |
+
+## Results — sealed `CommandResult`
+
+```java
+sealed interface CommandResult permits Success, Handled, Failure, InvalidArgs,
+        NoPermission, PlayerOnly, CooldownActive, PendingConfirmation,
+        HelpShown, RateLimited {}
+```
+
+You rarely inspect them directly — messages and flow are automatic. Tests and middlewares do pattern-match them.
+
+## MessageKey — exhaustive list
+
+Enum `io.github.hanielcota.commandframework.MessageKey`:
+
+| Key | Placeholders | Fires when |
+|---|---|---|
+| `PLAYER_ONLY` | — | Non-player ran a `@RequirePlayer` command. |
+| `NO_PERMISSION` | — | Sender missed `@Permission`. |
+| `INVALID_ARGUMENT` | `{name}`, `{input}` | Resolver rejected input. |
+| `MISSING_ARGUMENT` | `{name}` | Required arg not supplied. |
+| `TOO_MANY_ARGUMENTS` | `{input}` | Extra tokens beyond signature. |
+| `COOLDOWN_ACTIVE` | `{remaining}` | Cooldown still active. |
+| `COMMAND_ERROR` | — | Executor threw unhandled exception. |
+| `CONFIRM_PROMPT` | `{command}`, `{seconds}` | Confirmation requested. Default is clickable. |
+| `CONFIRM_NOTHING_PENDING` | — | Confirmation command run with nothing pending. |
+| `HELP_HEADER` | `{command}` | Top of auto help. |
+| `HELP_ENTRY` | `{usage}`, `{description}` | Per-executor line in help. |
+| `UNKNOWN_SUBCOMMAND` | `{typed}`, `{command}`, `{suggestion}` | Did-you-mean. |
+
+## MessageProvider factories
+
+```java
+// io.github.hanielcota.commandframework.MessageProvider
+static MessageProvider defaults();
+static MessageProvider fromMap(Map<MessageKey, String> templates);       // Type-safe.
+static MessageProvider fromStringMap(Map<String, String> templates);     // Config-friendly: "no-permission", "NO_PERMISSION", and "no_permission" all map to NO_PERMISSION. Unknown keys ignored. Missing keys fall back to defaults.
+```
+
+## Built-in argument resolvers
+
+Available in every framework instance:
+- `String` (trimmed, maxLength enforced)
+- `boolean` / `Boolean` (accepts true/false/yes/no/on/off)
+- `int`, `long`, `double`, `float` (parse + range)
+- `java.util.UUID`
+- Any `Enum<E>` — suggestions include every constant, case-insensitive
+- `java.util.Optional<T>` — wraps any of the above for optional parameters
+
+Paper adds: `org.bukkit.entity.Player`, `org.bukkit.World`.
+Velocity adds: `com.velocitypowered.api.proxy.Player`.
+
+## Custom ArgumentResolver
+
+```java
+public final class KitResolver implements ArgumentResolver<Kit> {
+    private final KitService kits;
+    public KitResolver(KitService kits) { this.kits = kits; }
+    @Override public Class<Kit> type() { return Kit.class; }
+    @Override public Kit resolve(ArgumentResolutionContext ctx, String input) throws ArgumentResolveException {
+        return kits.find(input).orElseThrow(() ->
+            new ArgumentResolveException("kit", input, "Unknown kit"));
+    }
+    @Override public List<String> suggest(CommandActor actor, String currentInput) {
+        return kits.names().stream().filter(n -> n.startsWith(currentInput)).toList();
+    }
+}
+```
+
+## Middleware
+
+```java
+public interface CommandMiddleware {
+    CommandResult handle(CommandContext ctx, Chain chain);
+    interface Chain { CommandResult proceed(CommandContext ctx); }
+}
+```
+
+Order of registration = order of execution (first registered runs outermost).
+
+## CommandActor API
+
+```java
+public interface CommandActor {
+    String name();
+    UUID uniqueId();
+    boolean isPlayer();
+    boolean hasPermission(String permission);
+    void sendMessage(net.kyori.adventure.text.Component message);
+    boolean isAvailable();            // false once the player disconnects
+    Object platformSender();           // Raw platform object (CommandSender / CommandSource)
+}
+```
+
+## Testing — `core-testkit`
+
+```kotlin
+testImplementation("com.github.HanielCota.CommandFramework:core-testkit:0.2.0")
+```
+
+```java
+CommandTestKit env = CommandTestKit.create();
+TestFrameworkBuilder framework = env.framework(new HealCommand());
+TestPlayer alice = framework.player("Alice").grant("myplugin.heal");
+CommandResult result = alice.dispatch("heal", "");
+DispatchAssert.assertThat(result).succeeded();
+```
+
+Assertions available on `DispatchAssert`: `succeeded()`, `handled()`, `failed(MessageKey)`, `invalidArgs(name, input)`, `noPermission(permission)`, `playerOnly()`, `cooldown(remaining)`, `pendingConfirmation(commandName)`, `helpShown()`.
+
+## Common tasks — recipes
+
+### Subcommands with shared permission
+
+```java
+@Command(name = "admin")
+@Permission("myplugin.admin")
+public final class AdminCommand {
+    @Execute public void panel(@Sender Player p) {}
+    @Execute(sub = "ban") @Permission("myplugin.admin.ban")
+    public void ban(@Sender Player p, Player target) {}
+}
+```
+
+### Inject a service into a command
+
+```java
+PaperCommandFramework.paper(this).bind(EconomyService.class, economy).build();
+
+@Command(name = "bal")
+public final class BalanceCommand {
+    @Inject private EconomyService economy;
+    @Execute public void run(@Sender Player p) { p.sendMessage(Component.text(economy.getBalance(p.getUniqueId()))); }
+}
+```
+
+### Optional with default
+
+```java
+@Execute(sub = "give")
+public void give(@Sender Player p, Player target, double amount,
+                 @Optional("false") boolean silent) {}
+```
+
+### Load messages from YAML (Paper)
+
+```java
+this.saveResource("messages.yml", false);
+var yaml = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "messages.yml"));
+var map = yaml.getKeys(false).stream()
+        .collect(Collectors.toMap(k -> k, yaml::getString));
+builder.messages(MessageProvider.fromStringMap(map));
+```
+
+### Confirm a destructive action
+
+```java
+@Execute(sub = "wipe") @Permission("myplugin.admin")
+@Confirm(expireSeconds = 10, commandName = "confirmar")
+public void wipe(@Sender Player p) { /* ... */ }
+// Player sees [Confirm] button -> clicking runs /confirmar within 10s.
+```
+
+### Async DB/HTTP inside a handler
+
+```java
+@Execute @Async
+public void home(@Sender Player p) {
+    Location h = db.loadHome(p.getUniqueId()); // blocking is fine, virtual thread
+    p.teleport(h); // sendMessage auto-hops to main thread on Paper
+}
+```
+
+## Frequent LLM mistakes to avoid
+
+1. **Inventing annotations** — the full list is above. `@Route`, `@Handler`, `@Subcommand`, `@Path` do not exist.
+2. **Using Bukkit command classes** — do not extend `Command`, `TabExecutor`, `CommandExecutor`. Do not touch `SimpleCommandMap`.
+3. **Registering in `plugin.yml`** — skip the `commands:` section. Only `name`, `main`, `version`, `api-version` are required.
+4. **Forgetting the annotation processor** — without it, `scanPackage` finds nothing, and `@Arg(greedy = true)` won't be validated until runtime.
+5. **`@Sender` on the wrong parameter** — must be first, must be a platform-known type (`CommandActor`, `Player`, `CommandSender` / `CommandSource`).
+6. **Treating messages as plain strings** — they are MiniMessage. Use `<red>`, `<click:run_command:'/foo'>`, `<hover:show_text:'bar'>`.
+7. **Manual async** — use `@Async`, not `Bukkit.getScheduler()`. The framework hops back automatically.
+8. **Cooldown before parsing** — cooldown is post-parse. Don't try to apply it manually in the handler.
+9. **Final/static `@Inject` fields** — must be plain instance fields.
+10. **`ArgumentResolver.type()` returning generic type** — `List<Kit>.class` isn't a thing. Use `Kit.class`.
+
+## Source of truth
+
+- Javadoc: https://hanielcota.github.io/CommandFramework/
+- Source: https://github.com/HanielCota/CommandFramework
+- Examples: https://github.com/HanielCota/CommandFramework/tree/main/examples
+- Changelog: https://github.com/HanielCota/CommandFramework/blob/main/CHANGELOG.md

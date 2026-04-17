@@ -796,6 +796,38 @@ Brigadier). `JavaPlugin.getCommand(...)` legado não é usado.
 
 ---
 
+## 🤖 Usando com LLMs (Cursor, Copilot, Claude Code, ChatGPT)
+
+Este repo inclui um [`llms.txt`](./llms.txt) na raiz — um resumo denso, legível
+por máquina, de toda anotação pública, método do builder, message key e receita
+comum, seguindo a [convenção llms.txt](https://llmstxt.org). LLMs que indexam o
+repo pegam automaticamente; você também pode colar no contexto do chat quando
+quiser sugestões mais precisas.
+
+### Template de prompt (copie e cole)
+
+> Você está escrevendo um plugin Paper 1.21+ usando **CommandFramework 0.2.0**
+> (https://github.com/HanielCota/CommandFramework). Sempre importe anotações de
+> `io.github.hanielcota.commandframework.annotation.*`. Use `@Command` em
+> classes, `@Execute` em métodos, `@Sender Player` como primeiro parâmetro.
+> Nunca declare comandos no `plugin.yml`. Nunca use `JavaPlugin.getCommand()`,
+> `CommandExecutor` ou `TabExecutor`. Mensagens são templates MiniMessage
+> (`<red>`, `<click:run_command:'/foo'>`). Use `@Async` para DB/HTTP — nunca
+> `Bukkit.getScheduler()`. Para a referência completa da API, consulte o
+> `llms.txt` na raiz do repositório. Se uma feature não estiver nessa
+> referência, diga isso em vez de inventar anotações.
+
+### O que tem no `llms.txt`
+
+- Lista exaustiva de anotações com todo atributo e default.
+- Enum `MessageKey` completo com nomes de placeholders.
+- Resolvers de argumento nativos e como escrever um custom.
+- Referência dos métodos do builder com descrição de uma linha.
+- Dez "erros comuns" para LLMs não alucinarem `@Route` / `@Handler` / `@Subcommand`.
+- Receitas de copy-paste para injection, confirm, async, mensagens via YAML.
+
+---
+
 ## 🤝 Contribuindo
 
 - Veja [`CONTRIBUTING.md`](./CONTRIBUTING.md) para setup local e convenções de PR.
