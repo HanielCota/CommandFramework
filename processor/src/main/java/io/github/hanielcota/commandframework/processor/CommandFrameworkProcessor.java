@@ -129,9 +129,15 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
             if (!(enclosing instanceof TypeElement owner)) {
                 continue;
             }
-            String sub = this.normalize(method.getAnnotation(Execute.class).sub());
+            String rawSub = method.getAnnotation(Execute.class).sub();
+            String sub = this.normalize(rawSub);
             if (sub.contains(" ")) {
-                this.error(method, "@Execute(sub) must be a single token after trimming.");
+                this.error(method, "@Execute(sub = \"" + rawSub + "\") must be a single token "
+                        + "(no internal whitespace). Got " + sub.split(" ").length + " tokens. "
+                        + "Fix options: (a) use a single-word name like "
+                        + "\"" + sub.replace(' ', '_') + "\" or \"" + sub.replace(" ", "") + "\"; "
+                        + "(b) split into two methods with their own @Execute(sub = \"...\"). "
+                        + "Nested multi-word subcommands are not supported — each @Execute maps to one token.");
             }
             Map<String, ExecutableElement> seen = perClass.computeIfAbsent(owner, ignored -> new HashMap<>());
             ExecutableElement previous = seen.put(sub, method);
@@ -216,7 +222,15 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
         if (method.getAnnotation(Async.class) != null
                 && parameter.getAnnotation(Sender.class) != null
                 && !commandActorName.equals(this.erasedTypeName(parameter.asType()))) {
-            this.error(parameter, "@Async sender parameters must use CommandActor.");
+            this.error(parameter, "@Async methods must declare @Sender CommandActor "
+                    + "(got @Sender " + this.erasedTypeName(parameter.asType()) + "). "
+                    + "Platform sender types (Player, CommandSender, CommandSource, ProxiedPlayer) "
+                    + "are not thread-safe off the main thread. "
+                    + "Fix: change the parameter to @Sender CommandActor and, inside the method, "
+                    + "re-resolve the platform sender on-demand — e.g. "
+                    + "Bukkit.getPlayer(java.util.UUID.fromString(actor.id())) on Paper, or "
+                    + "proxyServer.getPlayer(java.util.UUID.fromString(actor.id())) on Velocity. "
+                    + "Remember the lookup may return null if the player disconnected.");
         }
     }
 

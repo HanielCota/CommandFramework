@@ -60,7 +60,38 @@ class CommandFrameworkProcessorTest {
                 """);
 
         assertFalse(result.success());
-        assertTrue(result.messages().stream().anyMatch(message -> message.contains("must use CommandActor")));
+        assertTrue(result.messages().stream().anyMatch(message ->
+                message.contains("@Async methods must declare @Sender CommandActor")));
+        assertTrue(result.messages().stream().anyMatch(message ->
+                message.contains("Bukkit.getPlayer")),
+                "diagnostic should point at the Bukkit re-resolution fix");
+    }
+
+    @Test
+    void multiTokenSubNameFailsCompilation() throws IOException {
+        CompilationResult result = this.compile("MultiTokenSubCommand.java", """
+                package example;
+
+                import io.github.hanielcota.commandframework.annotation.Command;
+                import io.github.hanielcota.commandframework.annotation.Execute;
+
+                @Command(name = "player")
+                public final class MultiTokenSubCommand {
+                    @Execute(sub = "player ban")
+                    public void execute() {
+                    }
+                }
+                """);
+
+        assertFalse(result.success());
+        assertTrue(result.messages().stream().anyMatch(message ->
+                message.contains("must be a single token")));
+        assertTrue(result.messages().stream().anyMatch(message ->
+                message.contains("player ban")),
+                "diagnostic should echo the offending sub value");
+        assertTrue(result.messages().stream().anyMatch(message ->
+                message.contains("split into two methods")),
+                "diagnostic should suggest splitting into separate @Execute methods");
     }
 
     @Test

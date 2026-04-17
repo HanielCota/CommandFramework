@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Processor diagnostics — `@Execute(sub = ...)` multi-token** — now emits an
+  actionable message: echoes the offending value, says it must be a single
+  token, and suggests both a single-word rename (`"player_ban"` / `"playerban"`)
+  and splitting into two methods with their own `@Execute`.
+- **Processor diagnostics — `@Async` + platform `@Sender`** — now emits the
+  exact offending `@Sender` type, explains why platform senders can't cross the
+  virtual-thread hop, and shows the `Bukkit.getPlayer(UUID.fromString(actor.id()))`
+  / `proxyServer.getPlayer(...)` re-resolution pattern (with a null-return
+  warning).
+
 ### Fixed
 
 - **Maven coordinates** — `gradle-plugin` and the two example `settings.gradle.kts`
