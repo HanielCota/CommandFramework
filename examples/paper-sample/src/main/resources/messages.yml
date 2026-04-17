@@ -1,0 +1,20 @@
+# CommandFramework message templates.
+# All templates are MiniMessage strings. Placeholders are {curly-brace} and are
+# substituted before MiniMessage parses tags, so you can safely wrap placeholders
+# in <click>, <hover>, gradients, etc.
+#
+# Any key you omit falls back to the framework default. Remove a line to restore
+# the default for that key.
+
+player-only: "<red>Only players can use this command."
+no-permission: "<red>You do not have permission to use this command."
+invalid-argument: "<red>Invalid value for {name}: <yellow>{input}</yellow>"
+missing-argument: "<red>Missing argument: <yellow>{name}</yellow>"
+too-many-arguments: "<red>Too many arguments. Unexpected input: <yellow>{input}</yellow>"
+cooldown-active: "<red>You must wait <yellow>{remaining}</yellow> before using this command again."
+command-error: "<red>An unexpected error occurred while running this command."
+confirm-prompt: "<yellow>Click <click:run_command:'/{command}'><hover:show_text:'<gray>Run /{command}'><green>[Confirm]</green></hover></click> within <white>{seconds}s</white>."
+confirm-nothing-pending: "<red>You have nothing pending to confirm."
+help-header: "<yellow>Available commands for /{command}:"
+help-entry: "<gray>/{usage}</gray> <dark_gray>-</dark_gray> <white>{description}"
+unknown-subcommand: "<red>Unknown subcommand <yellow>{typed}</yellow>. Did you mean <click:suggest_command:'/{command} {suggestion}'><green>{suggestion}</green></click>?"

@@ -491,6 +491,51 @@ builder.messages(key -> switch (key) {
 });
 ```
 
+### Loading messages from a config file
+
+The `MessageProvider` interface ships three static factories so you can plug any
+configuration source without reimplementing the default templates:
+
+```java
+// Falls back to built-in templates for any key you omit.
+builder.messages(MessageProvider.fromStringMap(Map.of(
+    "no-permission", "<red>Acesso negado.",
+    "cooldown-active", "<yellow>Aguarde <bold>{remaining}</bold>."
+)));
+
+// EnumMap variant for type-safe plumbing.
+builder.messages(MessageProvider.fromMap(enumMapOfTemplates));
+
+// Plain accessor to the defaults (useful for chaining/decorating).
+MessageProvider base = MessageProvider.defaults();
+```
+
+`fromStringMap` accepts `no-permission`, `no_permission` and `NO_PERMISSION`
+indifferently, and silently skips keys it does not recognise — so your config
+can carry comments or forward-compatible entries without crashing the plugin.
+
+A ready-to-copy `messages.yml` lives at
+[`examples/paper-sample/src/main/resources/messages.yml`](./examples/paper-sample/src/main/resources/messages.yml)
+and its loader at
+[`PaperSamplePlugin.java`](./examples/paper-sample/src/main/java/com/example/paperdemo/PaperSamplePlugin.java).
+
+### Message keys and placeholders
+
+| Key | Placeholders | Purpose |
+|---|---|---|
+| `PLAYER_ONLY` | — | Non-player tried a `@RequirePlayer` command. |
+| `NO_PERMISSION` | — | Sender missed `@Permission`. |
+| `INVALID_ARGUMENT` | `{name}`, `{input}` | Resolver rejected the token. |
+| `MISSING_ARGUMENT` | `{name}` | Required argument not supplied. |
+| `TOO_MANY_ARGUMENTS` | `{input}` | Trailing tokens beyond the signature. |
+| `COOLDOWN_ACTIVE` | `{remaining}` | `@Cooldown` window still active. |
+| `COMMAND_ERROR` | — | Handler threw an unhandled exception. |
+| `CONFIRM_PROMPT` | `{command}`, `{seconds}` | Clickable confirm prompt. |
+| `CONFIRM_NOTHING_PENDING` | — | User ran the confirm command with nothing queued. |
+| `HELP_HEADER` | `{command}` | Top line of the generated help. |
+| `HELP_ENTRY` | `{usage}`, `{description}` | One line per executor in the help. |
+| `UNKNOWN_SUBCOMMAND` | `{typed}`, `{command}`, `{suggestion}` | Did-you-mean prompt for subcommand typos. |
+
 All templates are MiniMessage — colours, formatting, clickable/hoverable components all supported.
 
 ---

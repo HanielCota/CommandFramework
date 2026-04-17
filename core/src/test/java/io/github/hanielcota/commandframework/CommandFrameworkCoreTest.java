@@ -182,6 +182,17 @@ class CommandFrameworkCoreTest {
     }
 
     @Test
+    void fromStringMapOverridesKnownKeysAndFallsBackForMissing() {
+        MessageProvider provider = MessageProvider.fromStringMap(java.util.Map.of(
+                "no-permission", "<red>custom nope",
+                "unknown-key-ignored", "whatever"));
+
+        assertEquals("<red>custom nope", provider.message(MessageKey.NO_PERMISSION));
+        assertEquals(MessageProvider.defaults().message(MessageKey.PLAYER_ONLY),
+                provider.message(MessageKey.PLAYER_ONLY));
+    }
+
+    @Test
     void unknownSubcommandSuggestsClosestMatch() {
         HelpCommand command = new HelpCommand();
         CommandFramework<TestSender> framework = this.framework(command);

@@ -15,6 +15,9 @@ import io.github.hanielcota.commandframework.MessageProvider;
  */
 public final class DefaultMessageProvider implements MessageProvider {
 
+    /** Singleton instance — the provider is stateless. */
+    public static final DefaultMessageProvider INSTANCE = new DefaultMessageProvider();
+
     @Override
     public String message(MessageKey key) {
         return switch (key) {
