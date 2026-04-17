@@ -33,7 +33,7 @@ and everything else is wired automatically.
 public final class HealCommand {
     @Execute
     public void run(@Sender Player player) {
-        player.setHealth(player.getMaxHealth());
+        player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
     }
 }
 ```
@@ -119,16 +119,16 @@ dependencyResolutionManagement {
 **`build.gradle.kts` (Paper plugin):**
 ```kotlin
 dependencies {
-    implementation("com.github.HanielCota.CommandFramework:paper:0.2.0")
-    annotationProcessor("com.github.HanielCota.CommandFramework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:paper:0.2.0")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
 }
 ```
 
 **`build.gradle.kts` (Velocity plugin):**
 ```kotlin
 dependencies {
-    implementation("com.github.HanielCota.CommandFramework:velocity:0.2.0")
-    annotationProcessor("com.github.HanielCota.CommandFramework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:velocity:0.2.0")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
 }
 ```
 
@@ -167,12 +167,12 @@ commandframework {
 
 <dependencies>
     <dependency>
-        <groupId>com.github.HanielCota.CommandFramework</groupId>
+        <groupId>io.github.hanielcota.commandframework</groupId>
         <artifactId>paper</artifactId>
         <version>0.2.0</version>
     </dependency>
     <dependency>
-        <groupId>com.github.HanielCota.CommandFramework</groupId>
+        <groupId>io.github.hanielcota.commandframework</groupId>
         <artifactId>processor</artifactId>
         <version>0.2.0</version>
         <scope>provided</scope>
@@ -182,10 +182,26 @@ commandframework {
 
 ---
 
+## 📂 Package layout — where to import from
+
+Everything in the framework lives at one of these three roots. **There are no sub-packages** like `.message`, `.middleware`, `.resolver`, or `.actor` — don't let an AI hallucinate them.
+
+| You want | Import from |
+| --- | --- |
+| Annotations (`@Command`, `@Execute`, `@Arg`, `@Sender`, `@Permission`, `@Cooldown`, `@Confirm`, `@Async`, `@Optional`, `@Inject`, `@RequirePlayer`, `@Description`) | `io.github.hanielcota.commandframework.annotation.*` |
+| Core runtime types (`CommandActor`, `CommandContext`, `CommandResult`, `CommandMiddleware`, `ArgumentResolver`, `MessageKey`, `MessageProvider`) | `io.github.hanielcota.commandframework.*` |
+| Paper bridge (`PaperCommandFramework`) | `io.github.hanielcota.commandframework.paper.*` |
+| Velocity bridge (`VelocityCommandFramework`) | `io.github.hanielcota.commandframework.velocity.*` |
+| Testing harness (`CommandTestKit`, `TestSender`, `DispatchAssert`) | `io.github.hanielcota.commandframework.testkit.*` |
+
+If your IDE suggests an import ending in `.message.`, `.middleware.`, `.resolver.`, or `.actor.`, it's wrong — delete it and import from the flat root above.
+
+---
+
 ## 🚀 Your first command — 10 minute tutorial
 
-Assume you already have a working Paper plugin project (empty `onEnable`, `plugin.yml`
-declared). We'll add a `/heal` command.
+Assume you already have a working Paper plugin project (empty `onEnable`, a
+`paper-plugin.yml` — or legacy `plugin.yml` — declared). We'll add a `/heal` command.
 
 ### Step 1 — Add the dependency
 
@@ -227,6 +243,7 @@ import io.github.hanielcota.commandframework.annotation.Execute;
 import io.github.hanielcota.commandframework.annotation.Permission;
 import io.github.hanielcota.commandframework.annotation.Sender;
 import net.kyori.adventure.text.Component;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 
 @Command(name = "heal", description = "Fully heal a player")
@@ -235,7 +252,8 @@ public final class HealCommand {
 
     @Execute
     public void healSelf(@Sender Player player) {
-        player.setHealth(player.getMaxHealth());
+        // Paper 1.20.5+ uses the Attribute API; the legacy getMaxHealth() is deprecated.
+        player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
         player.sendMessage(Component.text("You've been fully healed."));
     }
 }
@@ -481,7 +499,10 @@ public final class AuditMiddleware implements CommandMiddleware {
 
     @Override
     public CommandResult handle(CommandContext ctx, Chain chain) {
-        this.log.write(ctx.actor(), ctx.label(), ctx.rawArguments());
+        // ctx.rawArguments() returns a single String (e.g. "kill Notch"),
+        // NOT a String[]. For the tokenized list use ctx.arguments() : List<String>.
+        String raw = ctx.rawArguments();
+        this.log.write(ctx.actor(), ctx.label(), raw);
         CommandResult result = chain.proceed(ctx);
         this.log.result(ctx.actor(), ctx.label(), result);
         return result;
@@ -571,7 +592,7 @@ Add the testkit to your `testImplementation` so you can unit-test commands
 without starting a server:
 
 ```kotlin
-testImplementation("com.github.HanielCota.CommandFramework:core-testkit:0.2.0")
+testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.0")
 ```
 
 ```java
@@ -679,9 +700,30 @@ Shadow plugin or declare MiniMessage in your POM.
 
 ## ❓ FAQ
 
-**Do I still need a `plugin.yml`?**
-Yes, but **without** a `commands:` section. You only declare `name`, `main`,
-`version`, and `api-version`.
+**Do I still need a `plugin.yml` (or `paper-plugin.yml`)?**
+Yes — Paper needs *some* plugin descriptor to know your `main` class. What you
+don't need is a `commands:` section.
+
+On **Paper 1.20.5+** the official sample (`examples/paper-sample`) uses the
+modern `paper-plugin.yml` format — that's the recommended choice. The legacy
+`plugin.yml` still works too, but Paper prints a deprecation notice on load.
+
+Minimal `src/main/resources/paper-plugin.yml`:
+
+```yaml
+name: MyPlugin
+main: com.example.myplugin.MyPlugin
+version: 1.0.0
+api-version: '1.21'
+```
+
+If you're using Gradle resource filtering, remember to match the filename:
+
+```kotlin
+tasks.processResources {
+    filesMatching("paper-plugin.yml") { expand("version" to project.version) }
+}
+```
 
 **Can one plugin register dozens of commands?**
 Yes. `scanPackage("...")` walks every `@Command` class. There's no hard limit.

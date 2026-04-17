@@ -33,7 +33,7 @@ com algumas anotações, e tudo o mais é conectado automaticamente.
 public final class HealCommand {
     @Execute
     public void run(@Sender Player player) {
-        player.setHealth(player.getMaxHealth());
+        player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
     }
 }
 ```
@@ -118,16 +118,16 @@ dependencyResolutionManagement {
 **`build.gradle.kts` (plugin Paper):**
 ```kotlin
 dependencies {
-    implementation("com.github.HanielCota.CommandFramework:paper:0.2.0")
-    annotationProcessor("com.github.HanielCota.CommandFramework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:paper:0.2.0")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
 }
 ```
 
 **`build.gradle.kts` (plugin Velocity):**
 ```kotlin
 dependencies {
-    implementation("com.github.HanielCota.CommandFramework:velocity:0.2.0")
-    annotationProcessor("com.github.HanielCota.CommandFramework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:velocity:0.2.0")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
 }
 ```
 
@@ -165,12 +165,12 @@ commandframework {
 
 <dependencies>
     <dependency>
-        <groupId>com.github.HanielCota.CommandFramework</groupId>
+        <groupId>io.github.hanielcota.commandframework</groupId>
         <artifactId>paper</artifactId>
         <version>0.2.0</version>
     </dependency>
     <dependency>
-        <groupId>com.github.HanielCota.CommandFramework</groupId>
+        <groupId>io.github.hanielcota.commandframework</groupId>
         <artifactId>processor</artifactId>
         <version>0.2.0</version>
         <scope>provided</scope>
@@ -180,10 +180,26 @@ commandframework {
 
 ---
 
+## 📂 Estrutura de pacotes — de onde importar
+
+Tudo no framework vive em uma destas três raízes. **Não existem sub-pacotes** tipo `.message`, `.middleware`, `.resolver` ou `.actor` — não deixe uma IA alucinar esses nomes.
+
+| Você quer | Importar de |
+| --- | --- |
+| Anotações (`@Command`, `@Execute`, `@Arg`, `@Sender`, `@Permission`, `@Cooldown`, `@Confirm`, `@Async`, `@Optional`, `@Inject`, `@RequirePlayer`, `@Description`) | `io.github.hanielcota.commandframework.annotation.*` |
+| Tipos do runtime (`CommandActor`, `CommandContext`, `CommandResult`, `CommandMiddleware`, `ArgumentResolver`, `MessageKey`, `MessageProvider`) | `io.github.hanielcota.commandframework.*` |
+| Bridge do Paper (`PaperCommandFramework`) | `io.github.hanielcota.commandframework.paper.*` |
+| Bridge do Velocity (`VelocityCommandFramework`) | `io.github.hanielcota.commandframework.velocity.*` |
+| Testkit (`CommandTestKit`, `TestSender`, `DispatchAssert`) | `io.github.hanielcota.commandframework.testkit.*` |
+
+Se a IDE sugerir um import terminado em `.message.`, `.middleware.`, `.resolver.` ou `.actor.`, está errado — apague e importe da raiz plana acima.
+
+---
+
 ## 🚀 Seu primeiro comando — tutorial de 10 minutos
 
 Assumindo que você já tem um projeto de plugin Paper funcionando (um `onEnable` vazio,
-`plugin.yml` declarado). Vamos adicionar um comando `/heal`.
+`paper-plugin.yml` — ou `plugin.yml` legado — declarado). Vamos adicionar um comando `/heal`.
 
 ### Passo 1 — Adicione a dependência
 
@@ -225,6 +241,7 @@ import io.github.hanielcota.commandframework.annotation.Execute;
 import io.github.hanielcota.commandframework.annotation.Permission;
 import io.github.hanielcota.commandframework.annotation.Sender;
 import net.kyori.adventure.text.Component;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 
 @Command(name = "heal", description = "Curar um jogador")
@@ -233,7 +250,8 @@ public final class HealCommand {
 
     @Execute
     public void healSelf(@Sender Player player) {
-        player.setHealth(player.getMaxHealth());
+        // Paper 1.20.5+ usa a API de Attribute; getMaxHealth() legado está deprecated.
+        player.setHealth(player.getAttribute(Attribute.MAX_HEALTH).getValue());
         player.sendMessage(Component.text("Você foi totalmente curado."));
     }
 }
@@ -479,7 +497,10 @@ public final class AuditMiddleware implements CommandMiddleware {
 
     @Override
     public CommandResult handle(CommandContext ctx, Chain chain) {
-        this.log.write(ctx.actor(), ctx.label(), ctx.rawArguments());
+        // ctx.rawArguments() retorna uma única String (ex. "kill Notch"),
+        // NÃO um String[]. Para a lista tokenizada use ctx.arguments() : List<String>.
+        String raw = ctx.rawArguments();
+        this.log.write(ctx.actor(), ctx.label(), raw);
         CommandResult result = chain.proceed(ctx);
         this.log.result(ctx.actor(), ctx.label(), result);
         return result;
@@ -569,7 +590,7 @@ Adicione o testkit ao seu `testImplementation` para testar comandos unitariament
 sem subir um servidor:
 
 ```kotlin
-testImplementation("com.github.HanielCota.CommandFramework:core-testkit:0.2.0")
+testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.0")
 ```
 
 ```java
@@ -677,9 +698,30 @@ Gradle Shadow ou declare o MiniMessage no seu POM.
 
 ## ❓ FAQ
 
-**Ainda preciso de um `plugin.yml`?**
-Precisa, mas **sem** a seção `commands:`. Você declara só `name`, `main`,
-`version` e `api-version`.
+**Ainda preciso de um `plugin.yml` (ou `paper-plugin.yml`)?**
+Sim — o Paper precisa de *algum* descritor de plugin pra achar sua classe
+`main`. O que você não precisa é da seção `commands:`.
+
+No **Paper 1.20.5+** o sample oficial (`examples/paper-sample`) usa o formato
+moderno `paper-plugin.yml` — essa é a escolha recomendada. O `plugin.yml`
+legado ainda funciona, mas o Paper imprime um aviso de deprecation no load.
+
+`src/main/resources/paper-plugin.yml` mínimo:
+
+```yaml
+name: MyPlugin
+main: com.example.myplugin.MyPlugin
+version: 1.0.0
+api-version: '1.21'
+```
+
+Se você usa filtragem de recursos do Gradle, lembre de casar o nome:
+
+```kotlin
+tasks.processResources {
+    filesMatching("paper-plugin.yml") { expand("version" to project.version) }
+}
+```
 
 **Um plugin pode registrar dúzias de comandos?**
 Pode. `scanPackage("...")` varre toda classe `@Command`. Não há limite rígido.

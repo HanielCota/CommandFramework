@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Maven coordinates** — `gradle-plugin` and the two example `settings.gradle.kts`
+  files were using `com.github.HanielCota.CommandFramework:*` as the groupId,
+  but JitPack only serves the published `groupId`
+  (`io.github.hanielcota.commandframework:*`). Consumers that followed the old
+  docs got 404s from JitPack. All internal references now use the real groupId.
+
+### Changed
+
+- **README / README.pt-BR / `llms.txt`** — replaced the old
+  `com.github.HanielCota.CommandFramework:*` Maven coordinates with the actual
+  published `io.github.hanielcota.commandframework:*` everywhere.
+- **Docs — package layout callout** — added a dedicated section to both READMEs
+  making it explicit that the framework has **no** `.message`, `.middleware`,
+  `.resolver`, or `.actor` sub-packages; runtime types live flat at
+  `io.github.hanielcota.commandframework.*`, annotations at `.annotation.*`,
+  bridges at `.paper.*` / `.velocity.*` / `.testkit.*`.
+- **Docs — `rawArguments()` type** — middleware example now explicitly types the
+  accessor as `String` (not `String[]`) and points readers to `ctx.arguments()`
+  for the tokenized `List<String>`.
+- **`llms.txt` — frequent-mistakes list** — added entries for the sub-package
+  invention, Maven coordinate confusion, `rawArguments()` typing, multi-token
+  `@Execute(sub = ...)`, and the `@Async + @Sender Player` rejection.
+- **Docs — `paper-plugin.yml`** — FAQ now recommends the modern
+  `paper-plugin.yml` descriptor (used by `examples/paper-sample`) over legacy
+  `plugin.yml` on Paper 1.20.5+, including a minimal template and the matching
+  `filesMatching("paper-plugin.yml")` resource-filter snippet. `llms.txt`
+  mirrors the same guidance.
+- **Docs — `Player.getMaxHealth()` deprecated** — every `/heal` tutorial
+  snippet (EN + PT, both the opening teaser and Step 3) now uses
+  `player.getAttribute(Attribute.MAX_HEALTH).getValue()`, matching the official
+  `HealCommand.java` sample. Added the `org.bukkit.attribute.Attribute` import
+  line so readers can copy-paste without IDE fix-ups.
+
 ## [0.2.0] - 2026-04-17
 
 ### Added

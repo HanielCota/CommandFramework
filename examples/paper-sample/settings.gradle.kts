@@ -9,10 +9,10 @@ pluginManagement {
 
 includeBuild("../..") {
     dependencySubstitution {
-        substitute(module("com.github.HanielCota.CommandFramework:annotations")).using(project(":annotations"))
-        substitute(module("com.github.HanielCota.CommandFramework:core")).using(project(":core"))
-        substitute(module("com.github.HanielCota.CommandFramework:paper")).using(project(":paper"))
-        substitute(module("com.github.HanielCota.CommandFramework:processor")).using(project(":processor"))
+        substitute(module("io.github.hanielcota.commandframework:annotations")).using(project(":annotations"))
+        substitute(module("io.github.hanielcota.commandframework:core")).using(project(":core"))
+        substitute(module("io.github.hanielcota.commandframework:paper")).using(project(":paper"))
+        substitute(module("io.github.hanielcota.commandframework:processor")).using(project(":processor"))
     }
 }
 

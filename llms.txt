@@ -27,8 +27,8 @@ repositories {
     maven("https://jitpack.io")
 }
 dependencies {
-    implementation("com.github.HanielCota.CommandFramework:paper:0.2.0")
-    annotationProcessor("com.github.HanielCota.CommandFramework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:paper:0.2.0")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
 }
 ```
 
@@ -225,6 +225,16 @@ public interface CommandMiddleware {
 
 Order of registration = order of execution (first registered runs outermost).
 
+`CommandContext` is a record with these accessors:
+
+| accessor | type |
+| --- | --- |
+| `actor()` | `CommandActor` |
+| `label()` | `String` |
+| `rawArguments()` | `String` (single raw tail, NOT `String[]`) |
+| `arguments()` | `List<String>` (tokenized, immutable) |
+| `commandPath()` | `String` (e.g. `"eco pay"`) |
+
 ## CommandActor API
 
 ```java
@@ -242,7 +252,7 @@ public interface CommandActor {
 ## Testing — `core-testkit`
 
 ```kotlin
-testImplementation("com.github.HanielCota.CommandFramework:core-testkit:0.2.0")
+testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.0")
 ```
 
 ```java
@@ -321,15 +331,20 @@ public void home(@Sender Player p) {
 ## Frequent LLM mistakes to avoid
 
 1. **Inventing annotations** — the full list is above. `@Route`, `@Handler`, `@Subcommand`, `@Path` do not exist.
-2. **Using Bukkit command classes** — do not extend `Command`, `TabExecutor`, `CommandExecutor`. Do not touch `SimpleCommandMap`.
-3. **Registering in `plugin.yml`** — skip the `commands:` section. Only `name`, `main`, `version`, `api-version` are required.
-4. **Forgetting the annotation processor** — without it, `scanPackage` finds nothing, and `@Arg(greedy = true)` won't be validated until runtime.
-5. **`@Sender` on the wrong parameter** — must be first, must be a platform-known type (`CommandActor`, `Player`, `CommandSender` / `CommandSource`).
-6. **Treating messages as plain strings** — they are MiniMessage. Use `<red>`, `<click:run_command:'/foo'>`, `<hover:show_text:'bar'>`.
-7. **Manual async** — use `@Async`, not `Bukkit.getScheduler()`. The framework hops back automatically.
-8. **Cooldown before parsing** — cooldown is post-parse. Don't try to apply it manually in the handler.
-9. **Final/static `@Inject` fields** — must be plain instance fields.
-10. **`ArgumentResolver.type()` returning generic type** — `List<Kit>.class` isn't a thing. Use `Kit.class`.
+2. **Inventing sub-packages** — there is no `io.github.hanielcota.commandframework.message`, `.middleware`, `.resolver`, or `.actor`. Everything is flat: `CommandActor`, `CommandContext`, `CommandResult`, `CommandMiddleware`, `ArgumentResolver`, `MessageKey`, `MessageProvider` all live directly at `io.github.hanielcota.commandframework.*`. Only the **annotations** are under `.annotation.*` and the **platform bridges** under `.paper.*` / `.velocity.*` / `.testkit.*`.
+3. **Wrong Maven coordinates** — the published `groupId` is `io.github.hanielcota.commandframework` (NOT `com.github.HanielCota.CommandFramework`, which only matches JitPack's URL path and 404s as a coordinate). Every dependency is `io.github.hanielcota.commandframework:<module>:<version>`.
+4. **`ctx.rawArguments()` as `String[]`** — it is a single `String` (the raw, untokenized argument tail). Use `ctx.arguments()` for the tokenized `List<String>`.
+5. **Multi-token `@Execute(sub = "player ban")`** — a sub name is a single token. Use dot or no-space form (e.g. `@Execute(sub = "playerban")`), or split into two methods with their own `sub`.
+6. **`@Async` + `@Sender Player`** — async executors must take `@Sender CommandActor` (not `Player` / `CommandSender` / `CommandSource`). Re-resolve the platform sender inside via `Bukkit.getPlayer(UUID.fromString(actor.id()))` etc.
+7. **Using Bukkit command classes** — do not extend `Command`, `TabExecutor`, `CommandExecutor`. Do not touch `SimpleCommandMap`.
+8. **Registering in `plugin.yml`** — skip the `commands:` section. Only `name`, `main`, `version`, `api-version` are required. On Paper 1.20.5+ prefer `paper-plugin.yml` (the modern format used by `examples/paper-sample`); legacy `plugin.yml` still works but triggers a deprecation notice.
+9. **Forgetting the annotation processor** — without it, `scanPackage` finds nothing, and `@Arg(greedy = true)` won't be validated until runtime.
+10. **`@Sender` on the wrong parameter** — must be first, must be a platform-known type (`CommandActor`, `Player`, `CommandSender` / `CommandSource`).
+11. **Treating messages as plain strings** — they are MiniMessage. Use `<red>`, `<click:run_command:'/foo'>`, `<hover:show_text:'bar'>`.
+12. **Manual async** — use `@Async`, not `Bukkit.getScheduler()`. The framework hops back automatically.
+13. **Cooldown before parsing** — cooldown is post-parse. Don't try to apply it manually in the handler.
+14. **Final/static `@Inject` fields** — must be plain instance fields.
+15. **`ArgumentResolver.type()` returning generic type** — `List<Kit>.class` isn't a thing. Use `Kit.class`.
 
 ## Source of truth
 

@@ -59,10 +59,10 @@ public final class CommandFrameworkPlugin implements Plugin<Project> {
                 .map(this::normalizePlatform);
         Provider<String> version = extension.getVersion().orElse("0.1.0");
         Provider<String> coordinate = module.zip(version,
-                (platform, resolvedVersion) -> "com.github.HanielCota.CommandFramework:"
+                (platform, resolvedVersion) -> "io.github.hanielcota.commandframework:"
                         + platform + ":" + resolvedVersion);
         Provider<String> processorCoordinate = version.map(resolvedVersion ->
-                "com.github.HanielCota.CommandFramework:processor:" + resolvedVersion);
+                "io.github.hanielcota.commandframework:processor:" + resolvedVersion);
 
         project.getDependencies().addProvider(JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME, coordinate);
         project.getDependencies().addProvider(JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME, processorCoordinate);
