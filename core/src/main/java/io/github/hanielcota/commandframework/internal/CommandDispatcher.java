@@ -105,6 +105,7 @@ public final class CommandDispatcher {
             TokenizedInput tokenizedInput = this.tokenizer.tokenize(rawArguments);
             Selection selection = this.select(command, tokenizedInput);
             if (selection == null) {
+                this.suggestSubcommand(actor, command, tokenizedInput);
                 this.sendHelp(actor, command, label);
                 return new CommandResult.HelpShown();
             }
@@ -428,6 +429,54 @@ public final class CommandDispatcher {
             return null;
         }
         return new Selection(command.rootExecutor(), tokenizedInput.tokens(), command.name());
+    }
+
+    private void suggestSubcommand(CommandActor actor, CommandDefinition command, TokenizedInput tokenizedInput) {
+        if (tokenizedInput.tokens().isEmpty()) {
+            return;
+        }
+        String typed = tokenizedInput.tokens().getFirst().toLowerCase(Locale.ROOT);
+        Set<String> available = command.executorsBySubcommand().keySet();
+        if (available.isEmpty()) {
+            return;
+        }
+        String closest = null;
+        int bestDistance = Integer.MAX_VALUE;
+        int threshold = Math.max(2, typed.length() / 3);
+        for (String candidate : available) {
+            int distance = levenshtein(typed, candidate);
+            if (distance < bestDistance && distance <= threshold) {
+                bestDistance = distance;
+                closest = candidate;
+            }
+        }
+        if (closest != null) {
+            this.messages.send(actor, MessageKey.UNKNOWN_SUBCOMMAND, Map.of(
+                    "typed", typed,
+                    "command", command.name(),
+                    "suggestion", closest));
+        }
+    }
+
+    private static int levenshtein(String a, String b) {
+        int[] previous = new int[b.length() + 1];
+        int[] current = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) {
+            previous[j] = j;
+        }
+        for (int i = 1; i <= a.length(); i++) {
+            current[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                current[j] = Math.min(
+                        Math.min(current[j - 1] + 1, previous[j] + 1),
+                        previous[j - 1] + cost);
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+        return previous[b.length()];
     }
 
     private List<String> subcommandSuggestions(CommandActor actor, CommandDefinition command, String prefix) {

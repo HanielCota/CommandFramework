@@ -25,10 +25,11 @@ public final class DefaultMessageProvider implements MessageProvider {
             case TOO_MANY_ARGUMENTS -> "<red>Too many arguments. Unexpected input: {input}";
             case COOLDOWN_ACTIVE -> "<red>You must wait {remaining} before using this command again.";
             case COMMAND_ERROR -> "<red>An unexpected error occurred while running this command.";
-            case CONFIRM_PROMPT -> "<yellow>Run /{command} within {seconds}s to confirm.";
+            case CONFIRM_PROMPT -> "<yellow>Click <click:run_command:'/{command}'><hover:show_text:'<gray>Run /{command}'><green>[Confirm]</green></hover></click> within <white>{seconds}s</white>.";
             case CONFIRM_NOTHING_PENDING -> "<red>You have nothing pending to confirm.";
             case HELP_HEADER -> "<yellow>Available commands for /{command}:";
             case HELP_ENTRY -> "<gray>/{usage}</gray> <dark_gray>-</dark_gray> <white>{description}";
+            case UNKNOWN_SUBCOMMAND -> "<red>Unknown subcommand <yellow>{typed}</yellow>. Did you mean <click:suggest_command:'/{command} {suggestion}'><green>{suggestion}</green></click>?";
         };
     }
 }

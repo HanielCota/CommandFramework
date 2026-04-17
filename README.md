@@ -380,9 +380,9 @@ Prompt and gate a destructive action behind a second command:
 public void wipe(@Sender Player sender) { /* ... */ }
 ```
 
-Sender sees: `Run /confirmar within 10s to confirm.`
-
-Typing `/confirmar` within the window executes the original invocation with the original arguments.
+Sender sees a clickable `[Confirm]` button (Adventure `<click:run_command>`) that
+runs `/confirmar` within the configured window. Players can also type `/confirmar`
+manually; either path executes the original invocation with the original arguments.
 
 ### Player-only and async
 

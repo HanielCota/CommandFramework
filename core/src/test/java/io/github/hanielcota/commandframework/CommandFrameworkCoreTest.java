@@ -182,6 +182,21 @@ class CommandFrameworkCoreTest {
     }
 
     @Test
+    void unknownSubcommandSuggestsClosestMatch() {
+        HelpCommand command = new HelpCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestPlayer player = this.environment.player("Alice");
+        player.grant("help.user");
+
+        CommandResult result = framework.dispatch(player, "helpme", "usr");
+
+        assertInstanceOf(CommandResult.HelpShown.class, result);
+        assertTrue(
+                player.messages.stream().anyMatch(message -> message.contains("user") && message.contains("usr")),
+                "Expected a did-you-mean message suggesting 'user' for typo 'usr', got: " + player.messages);
+    }
+
+    @Test
     void optionalDefaultAndVoidReturnWork() {
         OptionalCommand command = new OptionalCommand();
         CommandFramework<TestSender> framework = this.framework(command);
