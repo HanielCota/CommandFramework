@@ -45,6 +45,28 @@
     </context>
   </template>
 
+  <template name="cfarg" value="@Arg(name = &quot;$NAME$&quot;, description = &quot;$DESC$&quot;) $TYPE$ $VAR$"
+            description="CommandFramework: @Arg parameter"
+            toReformat="true" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;target&quot;" alwaysStopAt="true"/>
+    <variable name="DESC" expression="" defaultValue="&quot;Player to target&quot;" alwaysStopAt="true"/>
+    <variable name="TYPE" expression="" defaultValue="&quot;String&quot;" alwaysStopAt="true"/>
+    <variable name="VAR" expression="" defaultValue="&quot;target&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="JAVA_DECLARATION" value="true"/>
+    </context>
+  </template>
+
+  <template name="cfinject" value="@Inject&#10;private $TYPE$ $FIELD$;"
+            description="CommandFramework: @Inject field"
+            toReformat="true" toShortenFQNames="true">
+    <variable name="TYPE" expression="" defaultValue="&quot;EconomyService&quot;" alwaysStopAt="true"/>
+    <variable name="FIELD" expression="" defaultValue="&quot;economy&quot;" alwaysStopAt="true"/>
+    <context>
+      <option name="JAVA_DECLARATION" value="true"/>
+    </context>
+  </template>
+
   <template name="cfresolver" value="public final class $CLASS$ implements ArgumentResolver&lt;$TYPE$&gt; {&#10;&#10;    @Override&#10;    public Class&lt;$TYPE$&gt; type() {&#10;        return $TYPE$.class;&#10;    }&#10;&#10;    @Override&#10;    public $TYPE$ resolve(ArgumentResolutionContext context, String input) throws ArgumentResolveException {&#10;        $END$&#10;        throw new ArgumentResolveException(&quot;$ARG$&quot;, input, &quot;Invalid $ARG$&quot;);&#10;    }&#10;}"
             description="CommandFramework: custom ArgumentResolver skeleton"
             toReformat="true" toShortenFQNames="true">

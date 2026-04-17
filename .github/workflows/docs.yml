@@ -55,13 +55,15 @@ jobs:
           <body>
             <h1>CommandFramework Javadoc</h1>
             <p>Pick a module. The full source lives at <a href="https://github.com/HanielCota/CommandFramework">github.com/HanielCota/CommandFramework</a>.</p>
-            <div class="module"><a href="./core/"><strong>core</strong></a> — dispatcher, annotations, resolvers, managers.</div>
+            <div class="module"><a href="./annotations/"><strong>annotations</strong></a> — <code>@Command</code>, <code>@Execute</code>, <code>@Arg</code>, <code>@Cooldown</code>, etc.</div>
+            <div class="module"><a href="./core/"><strong>core</strong></a> — dispatcher, resolvers, managers, SPIs.</div>
             <div class="module"><a href="./paper/"><strong>paper</strong></a> — Paper adapter (<code>PaperCommandFramework</code>).</div>
             <div class="module"><a href="./velocity/"><strong>velocity</strong></a> — Velocity adapter (<code>VelocityCommandFramework</code>).</div>
             <div class="module"><a href="./core-testkit/"><strong>core-testkit</strong></a> — <code>CommandTestKit</code> for unit-testing commands.</div>
           </body>
           </html>
           HTML
+          cp -r annotations/build/docs/javadoc site/annotations
           cp -r core/build/docs/javadoc site/core
           cp -r paper/build/docs/javadoc site/paper
           cp -r velocity/build/docs/javadoc site/velocity
