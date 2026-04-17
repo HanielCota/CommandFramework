@@ -1,5 +1,7 @@
 <div align="center">
 
+**🌐 Language / Idioma:** **English** · [Português (BR)](./README.pt-BR.md)
+
 # CommandFramework
 
 **Create Minecraft plugin commands by writing plain Java classes.**
