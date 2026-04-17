@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`CommandTokenizer` — trailing-whitespace flag** — `tokenize()` split tokens
+  on any Unicode whitespace (`\s+`) but computed the trailing-space flag via
+  `rawArguments.endsWith(" ")`, which only recognizes the ASCII space. A
+  tab-terminated input like `"foo\t"` was classified as "still typing foo"
+  instead of "ready for the next token", producing the wrong tab-completion
+  set. The flag now uses `Character.isWhitespace(lastChar)` to match the split
+  definition.
+- **Processor — `@Execute(sub)` validation laxness** — `sub` only rejected the
+  ASCII space, so `"foo\tbar"`, `"foo\nbar"`, `"foo.bar"`, `"foo/bar"`, and
+  `"foo:bar"` all slipped past compile time and silently broke Brigadier lookup
+  at runtime. It now applies the same `[a-zA-Z0-9_-]+` rule already enforced on
+  `@Command(name)`, aliases, and `@Confirm(commandName)`, with a whitespace-
+  specific message that preserves the earlier actionable "split into two
+  methods" guidance.
+
 ### Changed
 
 - **Processor diagnostics — `@Execute(sub = ...)` multi-token** — now emits an

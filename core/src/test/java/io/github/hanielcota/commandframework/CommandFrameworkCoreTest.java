@@ -266,6 +266,20 @@ class CommandFrameworkCoreTest {
     }
 
     @Test
+    void rootArgumentSuggestionsAfterTrailingTabUseResolver() {
+        // Tokenizer splits on \s+, so a tab-terminated input must be treated as "ready for next
+        // token" just like a space-terminated one. Previously endsWith(" ") disagreed with the
+        // split and would have returned suggestions for the PREVIOUS token.
+        RootSuggestionCommand command = new RootSuggestionCommand();
+        CommandFramework<TestSender> framework =
+                this.framework(builder -> builder.resolver(new SuggestionValueResolver()), command);
+
+        List<String> suggestions = framework.suggest(this.environment.player("Alice"), "rootsuggest", "\t");
+
+        assertEquals(List.of("alpha", "beta"), suggestions);
+    }
+
+    @Test
     void tabCompleteStopsAfterLastArgument() {
         RootSuggestionCommand command = new RootSuggestionCommand();
         CommandFramework<TestSender> framework =

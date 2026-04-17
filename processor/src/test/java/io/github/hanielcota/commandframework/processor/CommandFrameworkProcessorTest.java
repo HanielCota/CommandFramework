@@ -95,6 +95,72 @@ class CommandFrameworkProcessorTest {
     }
 
     @Test
+    void tabInSubFailsCompilation() throws IOException {
+        CompilationResult result = this.compile("TabSubCommand.java", """
+                package example;
+
+                import io.github.hanielcota.commandframework.annotation.Command;
+                import io.github.hanielcota.commandframework.annotation.Execute;
+
+                @Command(name = "tab")
+                public final class TabSubCommand {
+                    @Execute(sub = "foo\\tbar")
+                    public void execute() {
+                    }
+                }
+                """);
+
+        assertFalse(result.success(),
+                "tab inside sub name should be rejected — the tokenizer splits on \\s+, so it would break routing at runtime");
+        assertTrue(result.messages().stream().anyMatch(message ->
+                message.contains("single token") || message.contains("letters, numbers")),
+                () -> "expected a whitespace/label diagnostic, got: " + result.messages());
+    }
+
+    @Test
+    void dotInSubFailsCompilation() throws IOException {
+        CompilationResult result = this.compile("DotSubCommand.java", """
+                package example;
+
+                import io.github.hanielcota.commandframework.annotation.Command;
+                import io.github.hanielcota.commandframework.annotation.Execute;
+
+                @Command(name = "dot")
+                public final class DotSubCommand {
+                    @Execute(sub = "foo.bar")
+                    public void execute() {
+                    }
+                }
+                """);
+
+        assertFalse(result.success(),
+                "characters outside [a-zA-Z0-9_-] in sub should be rejected — @Command(name) and @Confirm(commandName) already enforce the same rule");
+        assertTrue(result.messages().stream().anyMatch(message ->
+                message.contains("letters, numbers")),
+                () -> "expected a label-character diagnostic, got: " + result.messages());
+    }
+
+    @Test
+    void emptySubIsRoot() throws IOException {
+        CompilationResult result = this.compile("RootSubCommand.java", """
+                package example;
+
+                import io.github.hanielcota.commandframework.annotation.Command;
+                import io.github.hanielcota.commandframework.annotation.Execute;
+
+                @Command(name = "root")
+                public final class RootSubCommand {
+                    @Execute
+                    public void execute() {
+                    }
+                }
+                """);
+
+        assertTrue(result.success(),
+                () -> "empty sub should be accepted as root executor, got: " + result.messages());
+    }
+
+    @Test
     void invalidCommandMetadataFailsCompilation() throws IOException {
         CompilationResult result = this.compile("InvalidMetadataCommand.java", """
                 package example;

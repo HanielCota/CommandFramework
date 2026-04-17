@@ -131,13 +131,23 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
             }
             String rawSub = method.getAnnotation(Execute.class).sub();
             String sub = this.normalize(rawSub);
-            if (sub.contains(" ")) {
-                this.error(method, "@Execute(sub = \"" + rawSub + "\") must be a single token "
-                        + "(no internal whitespace). Got " + sub.split(" ").length + " tokens. "
-                        + "Fix options: (a) use a single-word name like "
-                        + "\"" + sub.replace(' ', '_') + "\" or \"" + sub.replace(" ", "") + "\"; "
-                        + "(b) split into two methods with their own @Execute(sub = \"...\"). "
-                        + "Nested multi-word subcommands are not supported — each @Execute maps to one token.");
+            if (!sub.isEmpty() && !VALID_LABEL.matcher(sub).matches()) {
+                if (this.containsWhitespace(sub)) {
+                    String collapsed = sub.replaceAll("\\s+", "");
+                    String underscored = sub.replaceAll("\\s+", "_");
+                    this.error(method, "@Execute(sub = \"" + rawSub + "\") must be a single token "
+                            + "(no internal whitespace — the tokenizer splits on any Unicode whitespace, "
+                            + "including spaces, tabs, CR and LF). "
+                            + "Fix options: (a) use a single-word name like "
+                            + "\"" + underscored + "\" or \"" + collapsed + "\"; "
+                            + "(b) split into two methods with their own @Execute(sub = \"...\"). "
+                            + "Nested multi-word subcommands are not supported — each @Execute maps to one token.");
+                } else {
+                    this.error(method, "@Execute(sub = \"" + rawSub + "\") must use only letters, "
+                            + "numbers, hyphens, or underscores (same rule as @Command(name) and "
+                            + "@Confirm(commandName)). Characters like '.', '/', ':' break Brigadier "
+                            + "lookup at runtime.");
+                }
             }
             Map<String, ExecutableElement> seen = perClass.computeIfAbsent(owner, ignored -> new HashMap<>());
             ExecutableElement previous = seen.put(sub, method);
@@ -552,6 +562,15 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
         if (!VALID_LABEL.matcher(label).matches()) {
             this.error(element, usage + " must use only letters, numbers, hyphens, or underscores.");
         }
+    }
+
+    private boolean containsWhitespace(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            if (Character.isWhitespace(value.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String normalize(String value) {

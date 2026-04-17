@@ -19,8 +19,9 @@ public final class CommandTokenizer {
 
     @SuppressWarnings("StringSplitter") // input is trimmed and empties are filtered below
     TokenizedInput tokenize(String rawArguments) {
+        boolean trailingWhitespace = this.endsWithWhitespace(rawArguments);
         if (rawArguments.isBlank()) {
-            return new TokenizedInput(List.of(), rawArguments.endsWith(" "));
+            return new TokenizedInput(List.of(), trailingWhitespace);
         }
 
         String[] parts = WHITESPACE.split(rawArguments.trim());
@@ -30,6 +31,16 @@ public final class CommandTokenizer {
                 tokens.add(part);
             }
         }
-        return new TokenizedInput(tokens, rawArguments.endsWith(" "));
+        return new TokenizedInput(tokens, trailingWhitespace);
+    }
+
+    // Splitting uses \s+, so the trailing-whitespace flag must use the same definition —
+    // otherwise a tab-terminated input like "foo\t" would be classified as "still typing foo"
+    // instead of "ready for the next token", and tab-completion would suggest the wrong set.
+    private boolean endsWithWhitespace(String input) {
+        if (input.isEmpty()) {
+            return false;
+        }
+        return Character.isWhitespace(input.charAt(input.length() - 1));
     }
 }
