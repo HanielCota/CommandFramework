@@ -33,6 +33,8 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion;
  */
 public final class CommandFrameworkPlugin implements Plugin<Project> {
 
+    private static final int JAVA_TOOLCHAIN_VERSION = 25;
+
     @Override
     public void apply(Project project) {
         CommandFrameworkExtension extension = project.getExtensions()
@@ -47,7 +49,7 @@ public final class CommandFrameworkPlugin implements Plugin<Project> {
     private void configureToolchain(Project project) {
         JavaPluginExtension java = project.getExtensions().findByType(JavaPluginExtension.class);
         if (java != null) {
-            java.getToolchain().getLanguageVersion().set(JavaLanguageVersion.of(25));
+            java.getToolchain().getLanguageVersion().set(JavaLanguageVersion.of(JAVA_TOOLCHAIN_VERSION));
         }
     }
 

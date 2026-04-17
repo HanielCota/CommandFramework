@@ -7,6 +7,16 @@
     <property name="fileExtensions" value="java, properties, xml"/>
     <property name="charset" value="UTF-8"/>
 
+    <!--
+      Skip MagicNumber on test sources. Tests routinely use raw durations, counts, and delays
+      (Duration.ofMillis(1100), 50, 5, etc.) as fixture data; demanding named constants adds
+      noise without catching any real bug.
+    -->
+    <module name="SuppressionSingleFilter">
+        <property name="files" value="[\\/]src[\\/]test[\\/]"/>
+        <property name="checks" value="MagicNumber"/>
+    </module>
+
     <module name="FileTabCharacter">
         <property name="eachLine" value="true"/>
     </module>

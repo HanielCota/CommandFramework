@@ -1378,7 +1378,9 @@ class CommandFrameworkCoreTest {
 
         @Execute
         public void execute() {
-            if (this.env == null) throw new IllegalStateException("injection failed");
+            if (this.env == null) {
+                throw new IllegalStateException("injection failed");
+            }
             this.calls.incrementAndGet();
         }
     }

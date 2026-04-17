@@ -9,14 +9,11 @@ import io.github.hanielcota.commandframework.CommandResult;
 import io.github.hanielcota.commandframework.FrameworkLogger;
 import io.github.hanielcota.commandframework.MessageKey;
 import io.github.hanielcota.commandframework.PlatformBridge;
-import io.github.hanielcota.commandframework.RegisteredCommand;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
-import net.kyori.adventure.text.Component;
 
 /**
  * High-level harness for testing annotation-based commands without standing up a real

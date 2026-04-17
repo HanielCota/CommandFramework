@@ -60,6 +60,8 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
     private static final Pattern VALID_LABEL = Pattern.compile("[a-zA-Z0-9_-]+");
     private static final String GENERATED_PACKAGE = "io.github.hanielcota.commandframework.generated";
     private static final String DESCRIPTOR_INTERFACE = GENERATED_PACKAGE + ".CommandDescriptor";
+    /** Mirrors {@link io.github.hanielcota.commandframework.annotation.Arg#maxLength()}. */
+    private static final int DEFAULT_ARG_MAX_LENGTH = 256;
 
     private final Set<String> generatedDescriptors = new LinkedHashSet<>();
     private final Set<String> processedCommands = new LinkedHashSet<>();
@@ -165,34 +167,56 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
 
             List<? extends VariableElement> parameters = method.getParameters();
             for (int index = 0; index < parameters.size(); index++) {
-                VariableElement parameter = parameters.get(index);
-                Arg arg = parameter.getAnnotation(Arg.class);
-                if (arg != null) {
-                    if (arg.maxLength() <= 0) {
-                        this.error(parameter, "@Arg(maxLength) must be > 0.");
-                    }
-                    if (arg.greedy()) {
-                        if (index != parameters.size() - 1) {
-                            this.error(parameter, "@Arg(greedy = true) must be the last parameter.");
-                        }
-                        if (!"java.lang.String".equals(this.resolvedTypeName(parameter))) {
-                            this.error(parameter, "@Arg(greedy = true) only supports String parameters.");
-                        }
-                    }
-                }
-
-                io.github.hanielcota.commandframework.annotation.Optional optional =
-                        parameter.getAnnotation(io.github.hanielcota.commandframework.annotation.Optional.class);
-                if (optional != null && parameter.asType().getKind().isPrimitive()
-                        && io.github.hanielcota.commandframework.annotation.Optional.UNSET.equals(optional.value())) {
-                    this.error(parameter, "@Optional on primitive parameters requires a default value.");
-                }
-                if (method.getAnnotation(Async.class) != null
-                        && parameter.getAnnotation(Sender.class) != null
-                        && !commandActorName.equals(this.erasedTypeName(parameter.asType()))) {
-                    this.error(parameter, "@Async sender parameters must use CommandActor.");
-                }
+                this.validateExecuteParameter(method, parameters, index, commandActorName);
             }
+        }
+    }
+
+    private void validateExecuteParameter(
+            ExecutableElement method,
+            List<? extends VariableElement> parameters,
+            int index,
+            String commandActorName
+    ) {
+        VariableElement parameter = parameters.get(index);
+        this.validateArg(parameter, index, parameters.size());
+        this.validateOptional(parameter);
+        this.validateAsyncSender(method, parameter, commandActorName);
+    }
+
+    private void validateArg(VariableElement parameter, int index, int parameterCount) {
+        Arg arg = parameter.getAnnotation(Arg.class);
+        if (arg == null) {
+            return;
+        }
+        if (arg.maxLength() <= 0) {
+            this.error(parameter, "@Arg(maxLength) must be > 0.");
+        }
+        if (!arg.greedy()) {
+            return;
+        }
+        if (index != parameterCount - 1) {
+            this.error(parameter, "@Arg(greedy = true) must be the last parameter.");
+        }
+        if (!"java.lang.String".equals(this.resolvedTypeName(parameter))) {
+            this.error(parameter, "@Arg(greedy = true) only supports String parameters.");
+        }
+    }
+
+    private void validateOptional(VariableElement parameter) {
+        io.github.hanielcota.commandframework.annotation.Optional optional =
+                parameter.getAnnotation(io.github.hanielcota.commandframework.annotation.Optional.class);
+        if (optional != null && parameter.asType().getKind().isPrimitive()
+                && io.github.hanielcota.commandframework.annotation.Optional.UNSET.equals(optional.value())) {
+            this.error(parameter, "@Optional on primitive parameters requires a default value.");
+        }
+    }
+
+    private void validateAsyncSender(ExecutableElement method, VariableElement parameter, String commandActorName) {
+        if (method.getAnnotation(Async.class) != null
+                && parameter.getAnnotation(Sender.class) != null
+                && !commandActorName.equals(this.erasedTypeName(parameter.asType()))) {
+            this.error(parameter, "@Async sender parameters must use CommandActor.");
         }
     }
 
@@ -408,7 +432,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 ? arg.value()
                 : parameter.getSimpleName().toString();
         boolean greedy = arg != null && arg.greedy();
-        int maxLength = arg != null ? arg.maxLength() : 256;
+        int maxLength = arg != null ? arg.maxLength() : DEFAULT_ARG_MAX_LENGTH;
         String optionalValue = optional != null
                 ? optional.value()
                 : io.github.hanielcota.commandframework.annotation.Optional.UNSET;

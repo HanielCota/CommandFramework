@@ -39,6 +39,12 @@
           typed CommandResult or IllegalStateException.
         -->
         <exclude name="AvoidCatchingThrowable"/>
+        <!--
+          Flags core-testkit helpers (TestSender, TestBridge, TestFrameworkBuilder) because their
+          names start with "Test". They are harness components, not JUnit tests, and renaming
+          them would break the documented testkit API.
+        -->
+        <exclude name="TestClassWithoutTestCases"/>
     </rule>
 
     <rule ref="category/java/multithreading.xml">
@@ -54,6 +60,23 @@
           region scheduler. Both are deliberate virtual-thread usage.
         -->
         <exclude name="DoNotUseThreads"/>
+        <!--
+          TestSender.available uses `volatile` for cross-thread visibility without the cost of an
+          AtomicBoolean; the field is read-mostly. Replacement offers no benefit.
+        -->
+        <exclude name="AvoidUsingVolatile"/>
+        <!--
+          TestSender iterates messages via `synchronized(this.messages)` — the documented pattern
+          for safely iterating a Collections.synchronizedList. Refusing synchronized statements
+          would force adopting a heavier concurrent collection with no visible gain.
+        -->
+        <exclude name="AvoidSynchronizedStatement"/>
+        <!--
+          CommandFrameworkProcessor.init is invoked once by javac during annotation-processor
+          setup. `synchronized` here serializes a cold path to match the AbstractProcessor contract
+          and costs nothing at runtime.
+        -->
+        <exclude name="AvoidSynchronizedAtMethodLevel"/>
     </rule>
 
     <rule ref="category/java/performance.xml">
@@ -99,6 +122,12 @@
           call site with no safety gain.
         -->
         <exclude name="SignatureDeclareThrowsException"/>
+        <!--
+          CommandFrameworkProcessor validation walks parameters and checks several annotation
+          combinations in nested ifs. Flattening with guard clauses makes the diagnostics harder
+          to read and duplicates iteration — not worth the churn.
+        -->
+        <exclude name="AvoidDeeplyNestedIfStmts"/>
     </rule>
 
     <rule ref="category/java/codestyle.xml">
@@ -115,5 +144,11 @@
         <exclude name="ShortMethodName"/>
         <exclude name="UseExplicitTypes"/>
         <exclude name="FieldNamingConventions"/>
+        <!--
+          JUnit tests are expected to import a large number of static assertion/mock methods
+          (assertEquals, assertThrows, assertInstanceOf, etc.). Capping them adds churn with
+          no readability gain.
+        -->
+        <exclude name="TooManyStaticImports"/>
     </rule>
 </ruleset>
