@@ -1,7 +1,5 @@
 package io.github.hanielcota.commandframework.internal;
 
-import io.github.hanielcota.commandframework.ArgumentResolutionContext;
-import io.github.hanielcota.commandframework.ArgumentResolveException;
 import io.github.hanielcota.commandframework.ArgumentResolver;
 import io.github.hanielcota.commandframework.AsyncExecutor;
 import io.github.hanielcota.commandframework.CommandActor;
@@ -19,7 +17,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -36,8 +33,6 @@ import java.util.Set;
  */
 public final class CommandDispatcher {
 
-    private static final Object SENDER_ARGUMENT = new Object();
-
     private final PlatformBridge<?> bridge;
     private final Map<String, CommandDefinition> commandsByLabel;
     private final Set<String> confirmationCommands;
@@ -50,17 +45,8 @@ public final class CommandDispatcher {
     private final FrameworkLogger logger;
     private final AsyncExecutor asyncExecutor;
     private final boolean debug;
+    private final ArgumentPreparer argumentPreparer;
     private final CommandSuggestionEngine suggestionEngine;
-    // ClassValue ties the cached resolver to the enum Class's own lifetime: when a plugin is
-    // reloaded and its ClassLoader is collected, the Class and its resolver entry are freed
-    // together. Using a ConcurrentHashMap here would pin both in memory forever.
-    @SuppressWarnings("unchecked")
-    private final ClassValue<ArgumentResolver<Object>> enumResolverCache = new ClassValue<>() {
-        @Override
-        protected ArgumentResolver<Object> computeValue(Class<?> type) {
-            return (ArgumentResolver<Object>) (ArgumentResolver<?>) DefaultArgumentResolvers.enumResolver(type);
-        }
-    };
 
     CommandDispatcher(
             PlatformBridge<?> bridge,
@@ -88,13 +74,14 @@ public final class CommandDispatcher {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.asyncExecutor = Objects.requireNonNull(asyncExecutor, "asyncExecutor");
         this.debug = debug;
+        this.argumentPreparer = new ArgumentPreparer(this.resolvers, this.bridge);
         this.suggestionEngine = new CommandSuggestionEngine(
                 this.commandsByLabel,
                 this.tokenizer,
                 this.messages,
                 this.logger,
                 this::allowed,
-                this::resolver
+                this.argumentPreparer::resolver
         );
     }
 
@@ -133,13 +120,13 @@ public final class CommandDispatcher {
                 this.traceDispatch(actor, label, selection.commandPath(), emitted, startedNanos);
             }
             return emitted;
-        } catch (MissingArgumentException exception) {
+        } catch (ArgumentPreparer.MissingArgumentException exception) {
             this.messages.send(actor, MessageKey.MISSING_ARGUMENT, Map.of("name", exception.argumentName));
             return CommandResult.handled();
-        } catch (TooManyArgumentsException exception) {
+        } catch (ArgumentPreparer.TooManyArgumentsException exception) {
             this.messages.send(actor, MessageKey.TOO_MANY_ARGUMENTS, Map.of("input", exception.input));
             return CommandResult.handled();
-        } catch (InvalidInputException exception) {
+        } catch (ArgumentPreparer.InvalidInputException exception) {
             return this.emit(actor, new CommandResult.InvalidArgs(exception.argumentName, exception.input));
         } catch (RuntimeException exception) {
             this.logger.error("Unhandled command exception while dispatching " + LogSafety.sanitize(label), exception);
@@ -208,7 +195,7 @@ public final class CommandDispatcher {
         // Cooldown is evaluated AFTER argument parsing so that a syntax error (MissingArgumentException /
         // ArgumentResolveException raised from prepareInvocation) does not consume the sender's cooldown
         // window. Otherwise a user who typo'd arguments would be locked out on their legitimate retry.
-        PreparedInvocation invocation = this.prepareInvocation(actor, command, label, selection);
+        PreparedInvocation invocation = this.argumentPreparer.prepare(actor, command, label, selection);
 
         if (executor.confirm() != null) {
             // Peek cooldown without consuming - if the sender is already on cooldown from a prior
@@ -243,103 +230,6 @@ public final class CommandDispatcher {
             return new CommandResult.CooldownActive(cooldownResult.remaining());
         }
         return null;
-    }
-
-    private PreparedInvocation prepareInvocation(CommandActor actor, CommandDefinition command, String label, Selection selection) {
-        int parameterCount = selection.executor().parameters().size();
-        List<Object> resolvedValues = new ArrayList<>(parameterCount);
-        List<Object> previousArguments = new ArrayList<>(parameterCount);
-        int tokenIndex = 0;
-
-        for (ParameterDefinition parameter : selection.executor().parameters()) {
-            if (parameter.sender()) {
-                resolvedValues.add(SENDER_ARGUMENT);
-                continue;
-            }
-
-            List<String> argumentTokens = selection.argumentTokens();
-            int tokenCount = argumentTokens.size();
-            String input = null;
-            // Greedy consumes everything remaining and pins tokenIndex to the end; the follow-up
-            // check below therefore always sees tokenIndex == tokenCount and skips. For non-greedy
-            // parameters we fall through to the same check and take one token.
-            if (parameter.greedy()) {
-                if (tokenIndex < tokenCount) {
-                    input = String.join(" ", argumentTokens.subList(tokenIndex, tokenCount));
-                }
-                tokenIndex = tokenCount;
-            }
-            if (tokenIndex < tokenCount) {
-                input = argumentTokens.get(tokenIndex++);
-            }
-
-            if (input == null) {
-                if (!parameter.optional()) {
-                    throw new MissingArgumentException(parameter.name());
-                }
-                Object defaultValue = this.defaultValue(actor, label, selection.commandPath(), parameter, previousArguments);
-                resolvedValues.add(defaultValue);
-                previousArguments.add(defaultValue);
-                continue;
-            }
-
-            if (input.length() > parameter.maxLength()) {
-                throw new InvalidInputException(parameter.name(), input);
-            }
-
-            Object resolved = this.resolveArgument(actor, label, selection.commandPath(), parameter, input, previousArguments);
-            resolvedValues.add(resolved);
-            previousArguments.add(resolved);
-        }
-        if (tokenIndex < selection.argumentTokens().size()) {
-            throw new TooManyArgumentsException(selection.argumentTokens().get(tokenIndex));
-        }
-
-        return new PreparedInvocation(command, selection.executor(), label, selection.commandPath(), resolvedValues);
-    }
-
-    private Object defaultValue(
-            CommandActor actor,
-            String label,
-            String commandPath,
-            ParameterDefinition parameter,
-            List<Object> previousArguments
-    ) {
-        if (parameter.javaOptional()
-                && io.github.hanielcota.commandframework.annotation.Optional.UNSET.equals(parameter.optionalValue())) {
-            return Optional.empty();
-        }
-
-        if (io.github.hanielcota.commandframework.annotation.Optional.UNSET.equals(parameter.optionalValue())) {
-            throw new MissingArgumentException(parameter.name());
-        }
-
-        // resolveArgument already wraps in Optional.of(...) when parameter.javaOptional() is true.
-        // Do NOT re-wrap here - doing so yields Optional<Optional<X>> and breaks reflective invoke.
-        return this.resolveArgument(actor, label, commandPath, parameter, parameter.optionalValue(), previousArguments);
-    }
-
-    private Object resolveArgument(
-            CommandActor actor,
-            String label,
-            String commandPath,
-            ParameterDefinition parameter,
-            String input,
-            List<Object> previousArguments
-    ) {
-        try {
-            ArgumentResolutionContext context = new ArgumentResolutionContext(actor, label, commandPath, previousArguments);
-            Object value = this.resolver(parameter.resolvedType()).resolve(context, input);
-            if (value == null) {
-                // Use getSimpleName() - keeps the diagnostic human-readable without leaking the
-                // consumer's package layout if this message ever ends up in a user-facing surface.
-                throw new ArgumentResolveException(
-                        parameter.name(), input, "Resolver returned null for " + parameter.resolvedType().getSimpleName());
-            }
-            return parameter.javaOptional() ? Optional.of(value) : value;
-        } catch (ArgumentResolveException exception) {
-            throw new InvalidInputException(parameter.name(), input, exception);
-        }
     }
 
     /**
@@ -380,13 +270,13 @@ public final class CommandDispatcher {
 
     private CommandResult invokeMethod(CommandActor actor, PreparedInvocation invocation) {
         try {
-            Object[] arguments = this.buildArguments(actor, invocation.executor(), invocation.preparedArguments());
+            Object[] arguments = this.argumentPreparer.bindArguments(actor, invocation);
             Object result = invocation.executor().invoker().invoke(invocation.command().instance(), arguments);
             if (result == null) {
                 return CommandResult.success();
             }
             return (CommandResult) result;
-        } catch (PlayerOnlySignal ignored) {
+        } catch (ArgumentPreparer.PlayerOnlySignal ignored) {
             return new CommandResult.PlayerOnly();
         } catch (Error error) {
             // Let Error (OOM, StackOverflow, LinkageError) propagate to the JVM - swallowing
@@ -399,37 +289,6 @@ public final class CommandDispatcher {
             this.logger.error("Unhandled command exception in " + invocation.commandPath(), exception);
             return CommandResult.failure(MessageKey.COMMAND_ERROR);
         }
-    }
-
-    private Object[] buildArguments(CommandActor actor, ExecutorDefinition executor, List<Object> preparedArguments) {
-        List<ParameterDefinition> parameters = executor.parameters();
-        Object[] arguments = new Object[parameters.size()];
-        for (int index = 0; index < parameters.size(); index++) {
-            ParameterDefinition parameter = parameters.get(index);
-            Object value = preparedArguments.get(index);
-            if (value != SENDER_ARGUMENT) {
-                arguments[index] = value;
-                continue;
-            }
-
-            if (parameter.rawType().isInstance(actor.platformSender())) {
-                arguments[index] = actor.platformSender();
-                continue;
-            }
-            if (parameter.rawType().isAssignableFrom(actor.getClass())) {
-                arguments[index] = actor;
-                continue;
-            }
-            if (parameter.rawType() == CommandActor.class) {
-                arguments[index] = actor;
-                continue;
-            }
-            if (this.bridge.isPlayerSenderType(parameter.rawType())) {
-                throw new PlayerOnlySignal();
-            }
-            throw new IllegalStateException("Unsupported sender type at runtime: " + parameter.rawType().getName());
-        }
-        return arguments;
     }
 
     private Selection select(CommandDefinition command, TokenizedInput tokenizedInput) {
@@ -544,68 +403,4 @@ public final class CommandDispatcher {
         actor.sendMessage(this.messages.renderLines(lines.toArray(Component[]::new)));
     }
 
-    @SuppressWarnings("unchecked")
-    private ArgumentResolver<Object> resolver(Class<?> type) {
-        if (type.isEnum()) {
-            return this.enumResolverCache.get(type);
-        }
-        ArgumentResolver<?> resolver = this.resolvers.get(type);
-        if (resolver == null) {
-            throw new IllegalStateException("No argument resolver registered for " + type.getName());
-        }
-        return (ArgumentResolver<Object>) resolver;
-    }
-
-    private static final class MissingArgumentException extends RuntimeException {
-        private final String argumentName;
-
-        private MissingArgumentException(String argumentName) {
-            this.argumentName = argumentName;
-        }
-
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
-    }
-
-    private static final class InvalidInputException extends RuntimeException {
-        private final String argumentName;
-        private final String input;
-
-        private InvalidInputException(String argumentName, String input) {
-            this(argumentName, input, null);
-        }
-
-        private InvalidInputException(String argumentName, String input, Throwable cause) {
-            super(cause);
-            this.argumentName = argumentName;
-            this.input = input;
-        }
-
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
-    }
-
-    private static final class TooManyArgumentsException extends RuntimeException {
-        private final String input;
-
-        private TooManyArgumentsException(String input) {
-            this.input = input;
-        }
-
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
-    }
-
-    private static final class PlayerOnlySignal extends RuntimeException {
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
-    }
 }
