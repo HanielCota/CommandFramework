@@ -214,6 +214,31 @@ class VelocityPlatformBridgeTest {
         assertTrue(exception.getMessage().contains("taken"));
     }
 
+    @Test
+    @DisplayName("custom visibility predicate filters targeted players from suggestions")
+    void customVisibilityPredicateFiltersTargetedPlayers() {
+        Player allowed = org.mockito.Mockito.mock(Player.class);
+        Player filtered = org.mockito.Mockito.mock(Player.class);
+
+        when(allowed.isActive()).thenReturn(true);
+        when(filtered.isActive()).thenReturn(true);
+        when(allowed.getUsername()).thenReturn("alice");
+        when(filtered.getUsername()).thenReturn("mallory");
+
+        when(this.server.getAllPlayers()).thenReturn(List.of(allowed, filtered));
+
+        BiPredicate<CommandActor, Player> predicate = (actor, target) -> !"mallory".equals(target.getUsername());
+        VelocityPlatformBridge filteredBridge = new VelocityPlatformBridge(this.server, this.plugin, predicate);
+
+        @SuppressWarnings("unchecked")
+        ArgumentResolver<Player> resolver = (ArgumentResolver<Player>) filteredBridge.platformResolvers().get(0);
+        CommandActor actor = org.mockito.Mockito.mock(CommandActor.class);
+
+        List<String> suggestions = resolver.suggest(actor, "");
+
+        assertEquals(List.of("alice"), suggestions);
+    }
+
     private static final class PluginStub {
     }
 

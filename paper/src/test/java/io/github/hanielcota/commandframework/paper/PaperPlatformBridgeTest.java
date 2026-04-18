@@ -155,4 +155,35 @@ class PaperPlatformBridgeTest {
         assertTrue(resolvers.stream().anyMatch(r -> r.type() == org.bukkit.entity.Player.class));
         assertTrue(resolvers.stream().anyMatch(r -> r.type() == org.bukkit.World.class));
     }
+
+    @Test
+    @DisplayName("player resolver filters vanished players from tab-suggest output")
+    void playerResolverFiltersVanishedPlayersFromSuggestions() {
+        Player viewer = org.mockito.Mockito.mock(Player.class);
+        Player visible = org.mockito.Mockito.mock(Player.class);
+        Player hidden = org.mockito.Mockito.mock(Player.class);
+
+        when(visible.getName()).thenReturn("alice");
+        lenient().when(hidden.getName()).thenReturn("bob");
+        when(viewer.canSee(visible)).thenReturn(true);
+        when(viewer.canSee(hidden)).thenReturn(false);
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        java.util.Collection raw = List.of(visible, hidden);
+        when(this.server.getOnlinePlayers()).thenReturn(raw);
+
+        CommandActor actor = org.mockito.Mockito.mock(CommandActor.class);
+        when(actor.platformSender()).thenReturn(viewer);
+
+        @SuppressWarnings("unchecked")
+        ArgumentResolver<Player> resolver = (ArgumentResolver<Player>) this.bridge.platformResolvers().stream()
+                .filter(r -> r.type() == Player.class)
+                .findFirst()
+                .orElseThrow();
+
+        List<String> suggestions = resolver.suggest(actor, "");
+
+        assertTrue(suggestions.contains("alice"));
+        assertFalse(suggestions.contains("bob"));
+    }
 }
