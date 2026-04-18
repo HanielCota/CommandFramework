@@ -193,8 +193,9 @@ public final class CommandDispatcher {
         }
 
         // Cooldown is evaluated AFTER argument parsing so that a syntax error (MissingArgumentException /
-        // ArgumentResolveException raised from prepareInvocation) does not consume the sender's cooldown
-        // window. Otherwise a user who typo'd arguments would be locked out on their legitimate retry.
+        // InvalidInputException raised from ArgumentPreparer.prepare) does not consume the sender's
+        // cooldown window. Otherwise a user who typo'd arguments would be locked out on their
+        // legitimate retry.
         PreparedInvocation invocation = this.argumentPreparer.prepare(actor, command, label, selection);
 
         if (executor.confirm() != null) {

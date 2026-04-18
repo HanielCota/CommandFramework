@@ -44,6 +44,13 @@ final class ArgumentPreparer {
         this.bridge = Objects.requireNonNull(bridge, "bridge");
     }
 
+    /**
+     * Resolves raw argument tokens into the prepared call-site values for the selected executor.
+     *
+     * @throws MissingArgumentException   if a required positional token is absent
+     * @throws InvalidInputException      if an argument resolver rejects a token
+     * @throws TooManyArgumentsException  if trailing tokens remain after all parameters are bound
+     */
     PreparedInvocation prepare(CommandActor actor, CommandDefinition command, String label, Selection selection) {
         int parameterCount = selection.executor().parameters().size();
         List<Object> resolvedValues = new ArrayList<>(parameterCount);
@@ -141,6 +148,11 @@ final class ArgumentPreparer {
         }
     }
 
+    /**
+     * Produces the final reflective argument array, substituting sender placeholders for the actor.
+     *
+     * @throws PlayerOnlySignal if the executor declares a player-only sender and the actor is not a player
+     */
     Object[] bindArguments(CommandActor actor, PreparedInvocation invocation) {
         ExecutorDefinition executor = invocation.executor();
         List<Object> preparedArguments = invocation.preparedArguments();
