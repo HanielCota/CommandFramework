@@ -322,9 +322,16 @@ public void wipe(@Sender Player p) { /* ... */ }
 
 ```java
 @Execute @Async
-public void home(@Sender Player p) {
-    Location h = db.loadHome(p.getUniqueId()); // blocking is fine, virtual thread
-    p.teleport(h); // sendMessage auto-hops to main thread on Paper
+public void home(@Sender CommandActor actor) {
+    UUID playerId = actor.uniqueId();
+    Location h = db.loadHome(playerId); // blocking is fine, virtual thread
+
+    Bukkit.getScheduler().runTask(plugin, () -> {
+        Player player = Bukkit.getPlayer(playerId);
+        if (player != null) {
+            player.teleport(h);
+        }
+    });
 }
 ```
 
@@ -334,14 +341,14 @@ public void home(@Sender Player p) {
 2. **Inventing sub-packages** — there is no `io.github.hanielcota.commandframework.message`, `.middleware`, `.resolver`, or `.actor`. Everything is flat: `CommandActor`, `CommandContext`, `CommandResult`, `CommandMiddleware`, `ArgumentResolver`, `MessageKey`, `MessageProvider` all live directly at `io.github.hanielcota.commandframework.*`. Only the **annotations** are under `.annotation.*` and the **platform bridges** under `.paper.*` / `.velocity.*` / `.testkit.*`.
 3. **Wrong Maven coordinates** — the published `groupId` is `io.github.hanielcota.commandframework` (NOT `com.github.HanielCota.CommandFramework`, which only matches JitPack's URL path and 404s as a coordinate). Every dependency is `io.github.hanielcota.commandframework:<module>:<version>`.
 4. **`ctx.rawArguments()` as `String[]`** — it is a single `String` (the raw, untokenized argument tail). Use `ctx.arguments()` for the tokenized `List<String>`.
-5. **Multi-token `@Execute(sub = "player ban")`** — a sub name is a single token. Use dot or no-space form (e.g. `@Execute(sub = "playerban")`), or split into two methods with their own `sub`.
-6. **`@Async` + `@Sender Player`** — async executors must take `@Sender CommandActor` (not `Player` / `CommandSender` / `CommandSource`). Re-resolve the platform sender inside via `Bukkit.getPlayer(UUID.fromString(actor.id()))` etc.
+5. **Multi-token `@Execute(sub = "player ban")`** — a sub name is a single token. Use a single-token form such as `@Execute(sub = "playerban")` / `player_ban`, or split into separate commands.
+6. **`@Async` + `@Sender Player`** — async executors must take `@Sender CommandActor` (not `Player` / `CommandSender` / `CommandSource`). Re-resolve the platform sender inside via `Bukkit.getPlayer(actor.uniqueId())` etc.
 7. **Using Bukkit command classes** — do not extend `Command`, `TabExecutor`, `CommandExecutor`. Do not touch `SimpleCommandMap`.
 8. **Registering in `plugin.yml`** — skip the `commands:` section. Only `name`, `main`, `version`, `api-version` are required. On Paper 1.20.5+ prefer `paper-plugin.yml` (the modern format used by `examples/paper-sample`); legacy `plugin.yml` still works but triggers a deprecation notice.
 9. **Forgetting the annotation processor** — without it, `scanPackage` finds nothing, and `@Arg(greedy = true)` won't be validated until runtime.
 10. **`@Sender` on the wrong parameter** — must be first, must be a platform-known type (`CommandActor`, `Player`, `CommandSender` / `CommandSource`).
 11. **Treating messages as plain strings** — they are MiniMessage. Use `<red>`, `<click:run_command:'/foo'>`, `<hover:show_text:'bar'>`.
-12. **Manual async** — use `@Async`, not `Bukkit.getScheduler()`. The framework hops back automatically.
+12. **Manual async** — use `@Async` for blocking work, then hop back to the platform main thread yourself before calling thread-confined APIs.
 13. **Cooldown before parsing** — cooldown is post-parse. Don't try to apply it manually in the handler.
 14. **Final/static `@Inject` fields** — must be plain instance fields.
 15. **`ArgumentResolver.type()` returning generic type** — `List<Kit>.class` isn't a thing. Use `Kit.class`.

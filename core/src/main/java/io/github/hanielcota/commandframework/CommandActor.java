@@ -19,8 +19,8 @@ public interface CommandActor {
     /**
      * Returns the sender identity.
      *
-     * <p>Platform integrations should return a stable UUID. Player-based features such as confirmations
-     * are keyed by this value.</p>
+     * <p>Platform integrations should return a stable UUID for every sender. Framework-managed
+     * features such as confirmations and cooldowns are keyed by this value.</p>
      *
      * @return the stable sender identity
      */

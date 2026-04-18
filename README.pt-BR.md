@@ -403,9 +403,16 @@ public final class HomeCommand {
 
     @Execute
     @Async                        // roda em virtual thread — seguro para DB/HTTP
-    public void home(@Sender Player player) {
-        Location h = database.loadHome(player.getUniqueId());
-        player.teleport(h);       // sendMessage volta automaticamente à thread principal
+    public void home(@Sender CommandActor actor) {
+        UUID playerId = actor.uniqueId();
+        Location h = database.loadHome(playerId);
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null) {
+                player.teleport(h);
+            }
+        });
     }
 }
 ```
@@ -737,8 +744,9 @@ Funciona, desde que você mantenha `@Command`/`@Execute` em métodos comuns
 Só se *o corpo do seu comando* bloquear. Use `@Async` para chamadas de DB/rede.
 
 **Como escrevo subcomandos de vários níveis tipo `/admin player ban`?**
-Use valores pontuados em `sub`: `@Execute(sub = "player ban")`. O dispatcher
-bate primeiro o caminho mais profundo.
+Não escreve. `@Execute(sub = "...")` aceita apenas um token. Use um rótulo
+único como `player_ban` / `playerban`, ou quebre o fluxo em comandos
+separados.
 
 **Onde os comandos são declarados para `plugin.yml` / `paper-plugin.yml`?**
 Não são. O framework registra direto no registrar Brigadier do Paper via
@@ -854,7 +862,8 @@ quiser sugestões mais precisas.
 > classes, `@Execute` em métodos, `@Sender Player` como primeiro parâmetro.
 > Nunca declare comandos no `plugin.yml`. Nunca use `JavaPlugin.getCommand()`,
 > `CommandExecutor` ou `TabExecutor`. Mensagens são templates MiniMessage
-> (`<red>`, `<click:run_command:'/foo'>`). Use `@Async` para DB/HTTP — nunca
+> (`<red>`, `<click:run_command:'/foo'>`). Use `@Async` para DB/HTTP e volte
+> para a thread principal do Paper antes de tocar APIs thread-confined.
 > `Bukkit.getScheduler()`. Para a referência completa da API, consulte o
 > `llms.txt` na raiz do repositório. Se uma feature não estiver nessa
 > referência, diga isso em vez de inventar anotações.

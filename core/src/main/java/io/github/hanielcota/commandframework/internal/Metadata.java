@@ -51,7 +51,8 @@ record ExecutorDefinition(
         boolean async,
         CooldownDefinition cooldown,
         ConfirmDefinition confirm,
-        List<ParameterDefinition> parameters
+        List<ParameterDefinition> parameters,
+        List<ParameterDefinition> suggestableParameters
 ) {
     ExecutorDefinition {
         Objects.requireNonNull(invoker, "invoker");
@@ -59,6 +60,34 @@ record ExecutorDefinition(
         Objects.requireNonNull(description, "description");
         Objects.requireNonNull(permission, "permission");
         parameters = List.copyOf(Objects.requireNonNull(parameters, "parameters"));
+        Objects.requireNonNull(suggestableParameters, "suggestableParameters");
+        suggestableParameters = List.copyOf(suggestableParameters);
+    }
+
+    ExecutorDefinition(
+            CommandInvoker invoker,
+            String subcommand,
+            String description,
+            String permission,
+            boolean requirePlayer,
+            boolean async,
+            CooldownDefinition cooldown,
+            ConfirmDefinition confirm,
+            List<ParameterDefinition> parameters
+    ) {
+        this(invoker, subcommand, description, permission, requirePlayer, async, cooldown, confirm,
+                parameters, deriveSuggestable(parameters));
+    }
+
+    private static List<ParameterDefinition> deriveSuggestable(List<ParameterDefinition> parameters) {
+        Objects.requireNonNull(parameters, "parameters");
+        List<ParameterDefinition> suggestable = new ArrayList<>(parameters.size());
+        for (ParameterDefinition parameter : parameters) {
+            if (!parameter.sender()) {
+                suggestable.add(parameter);
+            }
+        }
+        return suggestable;
     }
 }
 

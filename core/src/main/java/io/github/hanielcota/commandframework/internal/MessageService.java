@@ -9,6 +9,8 @@ import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Formats framework messages using {@link MessageProvider} templates and a MiniMessage parser.
@@ -20,6 +22,11 @@ import java.util.Objects;
 public final class MessageService {
 
     private static final long SECONDS_PER_MINUTE = 60L;
+    // Restricted to identifier-like keys to limit the blast radius of future extensions.
+    // A permissive match (e.g. any non-whitespace) would pre-qualify path-like or expression-like
+    // tokens such as "{../etc/passwd}" or "{$env.SECRET}" as placeholders — fine today because
+    // unknown keys pass through verbatim, but risky if dynamic lookup is ever layered on top.
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-zA-Z0-9_.-]{1,32})}");
 
     private final MessageProvider provider;
     private final MiniMessage miniMessage;
@@ -51,7 +58,8 @@ public final class MessageService {
     }
 
     public Component render(MessageKey key, Map<String, String> placeholders) {
-        String rendered = this.applyPlaceholders(this.template(key), placeholders);
+        Map<String, String> safePlaceholders = placeholders == null ? Map.of() : placeholders;
+        String rendered = this.applyPlaceholders(this.template(key), safePlaceholders);
         return this.miniMessage.deserialize(rendered, TagResolver.empty());
     }
 
@@ -80,11 +88,22 @@ public final class MessageService {
     }
 
     private String applyPlaceholders(String template, Map<String, String> placeholders) {
-        String result = Objects.requireNonNull(template, "template");
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            result = result.replace("{" + entry.getKey() + "}", Objects.toString(entry.getValue(), ""));
+        Objects.requireNonNull(template, "template");
+        // Single-pass scan: each {key} match in the template is replaced exactly once from the map,
+        // so a user-controlled value like "{otherKey}" is never re-interpreted as a placeholder.
+        // Unknown keys are left verbatim so missing placeholders are visible instead of silently empty.
+        Matcher matcher = PLACEHOLDER.matcher(template);
+        StringBuilder result = new StringBuilder(template.length());
+        while (matcher.find()) {
+            String key = matcher.group(1);
+            String raw = placeholders.get(key);
+            String replacement = raw == null
+                    ? matcher.group()
+                    : this.miniMessage.escapeTags(raw);
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
         }
-        return result;
+        matcher.appendTail(result);
+        return result.toString();
     }
 
 }

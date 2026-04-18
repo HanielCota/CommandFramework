@@ -43,6 +43,23 @@ public final class CooldownManager {
         return Math.max(0L, expiresAtNanos - currentTime);
     }
 
+    CooldownResult status(String commandPath, CommandActor actor, CooldownDefinition cooldown) {
+        Objects.requireNonNull(commandPath, "commandPath");
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(cooldown, "cooldown");
+        if (!cooldown.bypassPermission().isBlank() && actor.hasPermission(cooldown.bypassPermission())) {
+            return new CooldownResult(true, Duration.ZERO);
+        }
+
+        String key = this.key(actor.uniqueId(), commandPath);
+        long now = System.nanoTime();
+        CooldownEntry existing = this.entries.getIfPresent(key);
+        if (existing == null || existing.expiresAtNanos() <= now) {
+            return new CooldownResult(true, Duration.ZERO);
+        }
+        return new CooldownResult(false, Duration.ofNanos(existing.expiresAtNanos() - now));
+    }
+
     CooldownResult checkAndConsume(String commandPath, CommandActor actor, CooldownDefinition cooldown) {
         Objects.requireNonNull(commandPath, "commandPath");
         Objects.requireNonNull(actor, "actor");

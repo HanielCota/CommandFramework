@@ -11,6 +11,7 @@ import io.github.hanielcota.commandframework.annotation.Optional;
 import io.github.hanielcota.commandframework.annotation.Permission;
 import io.github.hanielcota.commandframework.annotation.RequirePlayer;
 import io.github.hanielcota.commandframework.annotation.Sender;
+import io.github.hanielcota.commandframework.internal.MessageService;
 import io.github.hanielcota.commandframework.scanfixtures.ManualFixtureCommand;
 import net.kyori.adventure.text.Component;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -205,6 +207,40 @@ class CommandFrameworkCoreTest {
         assertTrue(
                 player.messages.stream().anyMatch(message -> message.contains("user") && message.contains("usr")),
                 "Expected a did-you-mean message suggesting 'user' for typo 'usr', got: " + player.messages);
+    }
+
+    @Test
+    void unknownSubcommandSuggestionSkippedForVeryShortTypo() {
+        // Two-char typed tokens are within edit distance 2 of almost any short name,
+        // so did-you-mean would produce noise. Skip entirely below length 3.
+        // "zx" is chosen so the typo token does not appear as a substring inside the help listing.
+        HelpCommand command = new HelpCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestPlayer player = this.environment.player("Alice");
+        player.grant("help.user");
+
+        CommandResult result = framework.dispatch(player, "helpme", "zx");
+
+        assertInstanceOf(CommandResult.HelpShown.class, result);
+        assertFalse(
+                player.messages.stream().anyMatch(message -> message.contains("zx")),
+                "Expected no did-you-mean suggestion for 2-char typo, got: " + player.messages);
+    }
+
+    @Test
+    void unknownSubcommandSuggestionHidesInaccessibleCommands() {
+        HelpCommand command = new HelpCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestPlayer player = this.environment.player("Alice");
+        player.grant("help.user");
+
+        CommandResult result = framework.dispatch(player, "helpme", "admn");
+
+        assertInstanceOf(CommandResult.HelpShown.class, result);
+        assertFalse(
+                player.messages.stream().anyMatch(message -> message.contains("admin") && message.contains("admn")),
+                "Expected typo suggestions to ignore inaccessible subcommands, got: " + player.messages
+        );
     }
 
     @Test
@@ -441,7 +477,7 @@ class CommandFrameworkCoreTest {
     }
 
     @Test
-    void cooldownWithConfirmationStartsImmediately() {
+    void cooldownWithConfirmationDeferredUntilConfirm() {
         ConfirmCooldownCommand command = new ConfirmCooldownCommand();
         CommandFramework<TestSender> framework = this.framework(command);
         TestPlayer player = this.environment.player("Alice");
@@ -449,11 +485,30 @@ class CommandFrameworkCoreTest {
         CommandResult first = framework.dispatch(player, "armed", "");
         CommandResult second = framework.dispatch(player, "armed", "");
         CommandResult confirmed = framework.dispatch(player, "confirm", "");
+        CommandResult afterConfirm = framework.dispatch(player, "armed", "");
 
         assertInstanceOf(CommandResult.PendingConfirmation.class, first);
-        assertInstanceOf(CommandResult.CooldownActive.class, second);
+        // Cooldown is not charged while the prompt is pending — a second dispatch just re-queues.
+        assertInstanceOf(CommandResult.PendingConfirmation.class, second);
         assertInstanceOf(CommandResult.Success.class, confirmed);
+        // Cooldown starts at the moment of successful confirmation, so the next dispatch is blocked.
+        assertInstanceOf(CommandResult.CooldownActive.class, afterConfirm);
         assertEquals(1, command.calls.get());
+    }
+
+    @Test
+    void cooldownNotConsumedWhenConfirmAbandoned() throws InterruptedException {
+        BriefConfirmCooldownCommand command = new BriefConfirmCooldownCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestPlayer player = this.environment.player("Alice");
+
+        assertInstanceOf(CommandResult.PendingConfirmation.class, framework.dispatch(player, "armedbrief", ""));
+
+        // Let the confirm window expire. Cooldown must not have been eaten by the abandoned prompt.
+        Thread.sleep(1100L);
+
+        assertInstanceOf(CommandResult.PendingConfirmation.class, framework.dispatch(player, "armedbrief", ""));
+        assertEquals(0, command.calls.get());
     }
 
     @Test
@@ -569,6 +624,77 @@ class CommandFrameworkCoreTest {
         assertTrue(framework.commandLabels().contains("scannedfixture"));
     }
 
+    @Test
+    void messagePlaceholdersEscapeMiniMessageTags() {
+        MessageService messages = new MessageService(MessageProvider.defaults());
+        String maliciousInput = "<click:run_command:'/op @s'>boom</click>";
+
+        Component rendered = messages.render(MessageKey.INVALID_ARGUMENT, Map.of(
+                "name", "amount",
+                "input", maliciousInput
+        ));
+
+        assertFalse(this.hasClickEvent(rendered));
+        assertTrue(this.plainText(rendered).contains(maliciousInput));
+    }
+
+    @Test
+    void placeholderValueContainingAnotherPlaceholderKeyIsNotRecursivelyReplaced() {
+        MessageService messages = new MessageService(MessageProvider.fromStringMap(Map.of(
+                "no-permission", "A={a} B={b}")));
+
+        Component rendered = messages.render(MessageKey.NO_PERMISSION, Map.of(
+                "a", "{b}",
+                "b", "VALUE"
+        ));
+
+        // Single-pass replacement: the value "{b}" substituted for {a} is NOT re-scanned for {b}.
+        // Under the old cascading loop this output depended on Map.of iteration order.
+        assertEquals("A={b} B=VALUE", this.plainText(rendered));
+    }
+
+    @Test
+    void messageRenderWithNullPlaceholdersDoesNotThrow() {
+        MessageService messages = new MessageService(MessageProvider.defaults());
+
+        Component rendered = messages.render(MessageKey.NO_PERMISSION, null);
+
+        assertNotNull(rendered);
+    }
+
+    @Test
+    void tabCompletionAndDispatchAgreeOnPermissionForConsole() {
+        // Regression guard: allowed() is now derived from preflight(), so a console trying to
+        // run a @RequirePlayer subcommand must see an empty suggestion list AND a PlayerOnly
+        // result. If the two predicates ever drift, one of these two assertions fails.
+        MethodPlayerOnlyCommand command = new MethodPlayerOnlyCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestConsole console = this.environment.console("Console");
+
+        List<String> suggestions = framework.suggest(console, "methodplayer", "pla");
+        CommandResult result = framework.dispatch(console, "methodplayer", "player");
+
+        assertFalse(suggestions.contains("player"),
+                "Console must not see a @RequirePlayer subcommand in tab completion");
+        assertInstanceOf(CommandResult.PlayerOnly.class, result);
+    }
+
+    @Test
+    void placeholderPatternRejectsPathLikeKeys() {
+        // Hardening: keys outside [a-zA-Z0-9_.-]{1,32} are no longer matched as placeholders,
+        // so a template containing path-like or expression-like braces passes through verbatim.
+        MessageService messages = new MessageService(MessageProvider.fromStringMap(Map.of(
+                "no-permission", "root={../etc/passwd} env={$SECRET} ok={name}")));
+
+        Component rendered = messages.render(MessageKey.NO_PERMISSION, Map.of(
+                "../etc/passwd", "PWNED",
+                "$SECRET", "PWNED",
+                "name", "Alice"
+        ));
+
+        assertEquals("root={../etc/passwd} env={$SECRET} ok=Alice", this.plainText(rendered));
+    }
+
     private CommandFramework<TestSender> framework(Object... commands) {
         return this.framework(builder -> {
         }, commands);
@@ -582,6 +708,31 @@ class CommandFrameworkCoreTest {
         return builder.build();
     }
 
+    private boolean hasClickEvent(Component component) {
+        if (component.style().clickEvent() != null) {
+            return true;
+        }
+        for (Component child : component.children()) {
+            if (this.hasClickEvent(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String plainText(Component component) {
+        StringBuilder builder = new StringBuilder();
+        this.appendPlain(component, builder);
+        return builder.toString();
+    }
+
+    private void appendPlain(Component component, StringBuilder builder) {
+        if (component instanceof net.kyori.adventure.text.TextComponent text) {
+            builder.append(text.content());
+        }
+        component.children().forEach(child -> this.appendPlain(child, builder));
+    }
+
     @Test
     void greedyArgumentConsumesAllRemainingTokens() {
         GreedyCommand command = new GreedyCommand();
@@ -591,6 +742,23 @@ class CommandFrameworkCoreTest {
 
         assertInstanceOf(CommandResult.Success.class, result);
         assertEquals("hello world foo", command.lastMessage);
+    }
+
+    @Test
+    void unknownTokenDoesNotFallThroughToRootWithoutArguments() {
+        RootAndSubcommandCommand command = new RootAndSubcommandCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+        TestPlayer player = this.environment.player("Alice");
+
+        CommandResult result = framework.dispatch(player, "mixed", "staus");
+
+        assertInstanceOf(CommandResult.HelpShown.class, result);
+        assertEquals(0, command.rootCalls.get());
+        assertEquals(0, command.statusCalls.get());
+        assertTrue(
+                player.messages.stream().anyMatch(message -> message.contains("status") && message.contains("staus")),
+                "Expected an unknown-subcommand suggestion for 'status', got: " + player.messages
+        );
     }
 
     @Test
@@ -613,6 +781,30 @@ class CommandFrameworkCoreTest {
 
         assertInstanceOf(CommandResult.Success.class, result);
         assertEquals("hello", command.lastValue.orElse(null));
+    }
+
+    @Test
+    void javaOptionalParameterWithDefaultDoesNotDoubleWrap() {
+        // Regression: previously defaultValue() re-wrapped an already-Optional resolved value,
+        // yielding Optional<Optional<String>> which broke reflective invoke at runtime.
+        JavaOptionalWithDefaultCommand command = new JavaOptionalWithDefaultCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+
+        CommandResult result = framework.dispatch(this.environment.player("Alice"), "optdefault", "");
+
+        assertInstanceOf(CommandResult.Success.class, result);
+        assertEquals("fallback", command.lastValue.orElse(null));
+    }
+
+    @Test
+    void javaOptionalParameterWithDefaultUsesProvidedTokenWhenPresent() {
+        JavaOptionalWithDefaultCommand command = new JavaOptionalWithDefaultCommand();
+        CommandFramework<TestSender> framework = this.framework(command);
+
+        CommandResult result = framework.dispatch(this.environment.player("Alice"), "optdefault", "provided");
+
+        assertInstanceOf(CommandResult.Success.class, result);
+        assertEquals("provided", command.lastValue.orElse(null));
     }
 
     @Test
@@ -1354,6 +1546,22 @@ class CommandFrameworkCoreTest {
         }
     }
 
+    @Command(name = "mixed")
+    private static final class RootAndSubcommandCommand {
+        private final AtomicInteger rootCalls = new AtomicInteger();
+        private final AtomicInteger statusCalls = new AtomicInteger();
+
+        @Execute
+        public void root() {
+            this.rootCalls.incrementAndGet();
+        }
+
+        @Execute(sub = "status")
+        public void status() {
+            this.statusCalls.incrementAndGet();
+        }
+    }
+
     @Command(name = "opttype")
     private static final class JavaOptionalCommand {
         private java.util.Optional<String> lastValue = java.util.Optional.empty();
@@ -1361,6 +1569,28 @@ class CommandFrameworkCoreTest {
         @Execute
         public void execute(java.util.Optional<String> value) {
             this.lastValue = value;
+        }
+    }
+
+    @Command(name = "optdefault")
+    private static final class JavaOptionalWithDefaultCommand {
+        private java.util.Optional<String> lastValue = java.util.Optional.empty();
+
+        @Execute
+        public void execute(@Optional("fallback") java.util.Optional<String> value) {
+            this.lastValue = value;
+        }
+    }
+
+    @Command(name = "armedbrief")
+    private static final class BriefConfirmCooldownCommand {
+        private final AtomicInteger calls = new AtomicInteger();
+
+        @Execute
+        @Cooldown(value = 3, unit = TimeUnit.SECONDS)
+        @Confirm(expireSeconds = 1)
+        public void execute(@Sender TestPlayer player) {
+            this.calls.incrementAndGet();
         }
     }
 

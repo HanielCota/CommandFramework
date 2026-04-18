@@ -126,7 +126,7 @@ public final class CommandDispatcher {
         } catch (InvalidInputException exception) {
             return this.emit(actor, new CommandResult.InvalidArgs(exception.argumentName, exception.input));
         } catch (RuntimeException exception) {
-            this.logger.error("Unhandled command exception while dispatching " + label, exception);
+            this.logger.error("Unhandled command exception while dispatching " + LogSafety.sanitize(label), exception);
             return this.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
         }
     }
@@ -141,10 +141,14 @@ public final class CommandDispatcher {
             if (blocked != null) {
                 return this.emit(actor, blocked);
             }
+            CommandResult cooldownBlocked = this.consumeCooldown(actor, invocation.executor(), invocation.commandPath());
+            if (cooldownBlocked != null) {
+                return this.emit(actor, cooldownBlocked);
+            }
             CommandResult result = this.executePrepared(actor, invocation);
             return this.emit(actor, result);
         } catch (RuntimeException exception) {
-            this.logger.error("Unhandled command exception while confirming " + label, exception);
+            this.logger.error("Unhandled command exception while confirming " + LogSafety.sanitize(label), exception);
             return this.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
         }
     }
@@ -174,18 +178,20 @@ public final class CommandDispatcher {
             }
             return this.argumentSuggestions(actor, subcommand, tokenizedInput.tokens(), tokenizedInput.trailingSpace(), 1);
         } catch (RuntimeException exception) {
-            this.logger.warn("Exception during tab completion for " + label, exception);
+            this.logger.warn("Exception during tab completion for " + LogSafety.sanitize(label), exception);
             return List.of();
         }
     }
 
     private List<String> emptyTokenSuggestions(CommandActor actor, CommandDefinition command, boolean trailingSpace) {
-        LinkedHashSet<String> suggestions = new LinkedHashSet<>(this.subcommandSuggestions(actor, command, ""));
+        List<String> subcommand = this.subcommandSuggestions(actor, command, "");
         ExecutorDefinition rootExecutor = command.rootExecutor();
-        if (trailingSpace && rootExecutor != null && this.allowed(actor, rootExecutor)) {
-            suggestions.addAll(this.argumentSuggestions(actor, rootExecutor, List.of(), true, 0));
+        if (!trailingSpace || rootExecutor == null || !this.allowed(actor, rootExecutor)) {
+            return subcommand;
         }
-        return List.copyOf(suggestions);
+        LinkedHashSet<String> merged = new LinkedHashSet<>(subcommand);
+        merged.addAll(this.argumentSuggestions(actor, rootExecutor, List.of(), true, 0));
+        return List.copyOf(merged);
     }
 
     private List<String> rootExecutorSuggestions(
@@ -244,24 +250,45 @@ public final class CommandDispatcher {
         // window. Otherwise a user who typo'd arguments would be locked out on their legitimate retry.
         PreparedInvocation invocation = this.prepareInvocation(actor, command, label, selection);
 
-        if (executor.cooldown() != null) {
-            CooldownManager.CooldownResult cooldownResult =
-                    this.cooldownManager.checkAndConsume(selection.commandPath(), actor, executor.cooldown());
-            if (!cooldownResult.allowed()) {
-                return new CommandResult.CooldownActive(cooldownResult.remaining());
-            }
-        }
-
         if (executor.confirm() != null) {
+            // Peek cooldown without consuming — if the sender is already on cooldown from a prior
+            // successful confirmation, reject now instead of queueing another prompt that would
+            // only hit the same cooldown at consume time. Cooldown is actually consumed in
+            // dispatchConfirmation, so abandoned or expired prompts never eat the window.
+            if (executor.cooldown() != null) {
+                CooldownManager.CooldownResult status =
+                        this.cooldownManager.status(selection.commandPath(), actor, executor.cooldown());
+                if (!status.allowed()) {
+                    return new CommandResult.CooldownActive(status.remaining());
+                }
+            }
             this.confirmationManager.put(actor, invocation, executor.confirm());
             return new CommandResult.PendingConfirmation(executor.confirm().commandName(), executor.confirm().expiresIn());
+        }
+
+        CommandResult cooldownBlocked = this.consumeCooldown(actor, executor, selection.commandPath());
+        if (cooldownBlocked != null) {
+            return cooldownBlocked;
         }
         return this.executePrepared(actor, invocation);
     }
 
+    private CommandResult consumeCooldown(CommandActor actor, ExecutorDefinition executor, String commandPath) {
+        if (executor.cooldown() == null) {
+            return null;
+        }
+        CooldownManager.CooldownResult cooldownResult =
+                this.cooldownManager.checkAndConsume(commandPath, actor, executor.cooldown());
+        if (!cooldownResult.allowed()) {
+            return new CommandResult.CooldownActive(cooldownResult.remaining());
+        }
+        return null;
+    }
+
     private PreparedInvocation prepareInvocation(CommandActor actor, CommandDefinition command, String label, Selection selection) {
-        List<Object> resolvedValues = new ArrayList<>();
-        List<Object> previousArguments = new ArrayList<>();
+        int parameterCount = selection.executor().parameters().size();
+        List<Object> resolvedValues = new ArrayList<>(parameterCount);
+        List<Object> previousArguments = new ArrayList<>(parameterCount);
         int tokenIndex = 0;
 
         for (ParameterDefinition parameter : selection.executor().parameters()) {
@@ -323,8 +350,9 @@ public final class CommandDispatcher {
             throw new MissingArgumentException(parameter.name());
         }
 
-        Object resolved = this.resolveArgument(actor, label, commandPath, parameter, parameter.optionalValue(), previousArguments);
-        return parameter.javaOptional() ? Optional.of(resolved) : resolved;
+        // resolveArgument already wraps in Optional.of(...) when parameter.javaOptional() is true.
+        // Do NOT re-wrap here — doing so yields Optional<Optional<X>> and breaks reflective invoke.
+        return this.resolveArgument(actor, label, commandPath, parameter, parameter.optionalValue(), previousArguments);
     }
 
     private Object resolveArgument(
@@ -339,8 +367,10 @@ public final class CommandDispatcher {
             ArgumentResolutionContext context = new ArgumentResolutionContext(actor, label, commandPath, previousArguments);
             Object value = this.resolver(parameter.resolvedType()).resolve(context, input);
             if (value == null) {
+                // Use getSimpleName() — keeps the diagnostic human-readable without leaking the
+                // consumer's package layout if this message ever ends up in a user-facing surface.
                 throw new ArgumentResolveException(
-                        parameter.name(), input, "Resolver returned null for " + parameter.resolvedType().getName());
+                        parameter.name(), input, "Resolver returned null for " + parameter.resolvedType().getSimpleName());
             }
             return parameter.javaOptional() ? Optional.of(value) : value;
         } catch (ArgumentResolveException exception) {
@@ -348,14 +378,35 @@ public final class CommandDispatcher {
         }
     }
 
+    /**
+     * Executes a prepared invocation either synchronously or on the async executor.
+     *
+     * <p><b>Async caveat:</b> for {@code @Async} executors this method returns
+     * {@link CommandResult#success()} immediately and dispatches emission from the async callback.
+     * The middleware chain therefore sees {@code Success}, not the executor's real result — any
+     * post-processing middleware (metrics, audit, cooldown rollback) cannot observe failures
+     * produced inside an async body. Middlewares that need the real outcome must run on the
+     * async thread themselves or the executor must be synchronous.
+     */
     private CommandResult executePrepared(CommandActor actor, PreparedInvocation invocation) {
         if (invocation.executor().async()) {
             this.asyncExecutor.execute(invocation.commandPath(), () -> {
+                CommandResult result;
                 try {
-                    CommandResult result = this.invokeMethod(actor, invocation);
-                    this.emit(actor, result);
-                } catch (Throwable exception) {
+                    result = this.invokeMethod(actor, invocation);
+                } catch (Exception exception) {
+                    // Narrowed from Throwable — let Error (OOM, StackOverflow) reach the
+                    // virtual-thread uncaught handler so the operator sees a real signal.
                     this.logger.error("Unhandled exception in async command " + invocation.commandPath(), exception);
+                    return;
+                }
+                try {
+                    this.emit(actor, result);
+                } catch (Exception exception) {
+                    // Command body completed; only result emission failed (e.g. plugin disabled
+                    // mid-flight, message renderer threw). Log as warn to avoid flagging a
+                    // successful command as a runtime failure in operator dashboards.
+                    this.logger.warn("Failed to emit result for async command " + invocation.commandPath(), exception);
                 }
             });
             return CommandResult.success();
@@ -373,7 +424,14 @@ public final class CommandDispatcher {
             return (CommandResult) result;
         } catch (PlayerOnlySignal ignored) {
             return new CommandResult.PlayerOnly();
+        } catch (Error error) {
+            // Let Error (OOM, StackOverflow, LinkageError) propagate to the JVM — swallowing
+            // them hides irrecoverable JVM state from the operator and keeps a degraded process
+            // running with inconsistent guarantees.
+            throw error;
         } catch (Throwable exception) {
+            // Broad Throwable catch is required because the invoker signature declares
+            // `throws Throwable`; Errors have already been re-thrown above.
             this.logger.error("Unhandled command exception in " + invocation.commandPath(), exception);
             return CommandResult.failure(MessageKey.COMMAND_ERROR);
         }
@@ -425,10 +483,23 @@ public final class CommandDispatcher {
             );
         }
 
-        if (command.rootExecutor() == null) {
+        ExecutorDefinition rootExecutor = command.rootExecutor();
+        if (rootExecutor == null) {
             return null;
         }
-        return new Selection(command.rootExecutor(), tokenizedInput.tokens(), command.name());
+        if (!command.executorsBySubcommand().isEmpty() && !this.hasNonSenderParameters(rootExecutor)) {
+            return null;
+        }
+        return new Selection(rootExecutor, tokenizedInput.tokens(), command.name());
+    }
+
+    private boolean hasNonSenderParameters(ExecutorDefinition executor) {
+        for (ParameterDefinition parameter : executor.parameters()) {
+            if (!parameter.sender()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void suggestSubcommand(CommandActor actor, CommandDefinition command, TokenizedInput tokenizedInput) {
@@ -436,14 +507,19 @@ public final class CommandDispatcher {
             return;
         }
         String typed = tokenizedInput.tokens().getFirst().toLowerCase(Locale.ROOT);
-        Set<String> available = command.executorsBySubcommand().keySet();
-        if (available.isEmpty()) {
+        // Skip did-you-mean for very short tokens — any 2-char typo is within edit distance 2 of
+        // most short subcommand names, which produces irrelevant suggestions.
+        if (typed.length() < 3) {
             return;
         }
         String closest = null;
         int bestDistance = Integer.MAX_VALUE;
-        int threshold = Math.max(2, typed.length() / 3);
-        for (String candidate : available) {
+        int threshold = Math.min(3, Math.max(1, typed.length() / 3));
+        for (Map.Entry<String, ExecutorDefinition> entry : command.executorsBySubcommand().entrySet()) {
+            if (!this.allowed(actor, entry.getValue())) {
+                continue;
+            }
+            String candidate = entry.getKey();
             int distance = levenshtein(typed, candidate);
             if (distance < bestDistance && distance <= threshold) {
                 bestDistance = distance;
@@ -481,8 +557,9 @@ public final class CommandDispatcher {
 
     private List<String> subcommandSuggestions(CommandActor actor, CommandDefinition command, String prefix) {
         String lowered = prefix.toLowerCase(Locale.ROOT);
-        List<String> suggestions = new ArrayList<>();
-        for (Map.Entry<String, ExecutorDefinition> entry : command.executorsBySubcommand().entrySet()) {
+        Map<String, ExecutorDefinition> executors = command.executorsBySubcommand();
+        List<String> suggestions = new ArrayList<>(executors.size());
+        for (Map.Entry<String, ExecutorDefinition> entry : executors.entrySet()) {
             if (!entry.getKey().startsWith(lowered)) {
                 continue;
             }
@@ -501,7 +578,7 @@ public final class CommandDispatcher {
             boolean trailingSpace,
             int tokenOffset
     ) {
-        List<ParameterDefinition> arguments = executor.parameters().stream().filter(parameter -> !parameter.sender()).toList();
+        List<ParameterDefinition> arguments = executor.suggestableParameters();
         if (arguments.isEmpty()) {
             return List.of();
         }
@@ -524,12 +601,15 @@ public final class CommandDispatcher {
         return suggestions != null ? suggestions : List.of();
     }
 
+    // Derived from preflight() so both paths cannot drift — any new gate added to preflight
+    // (world restriction, feature flag, etc.) is automatically reflected in tab completion,
+    // help rendering, and did-you-mean filtering without a second edit.
     private boolean allowed(CommandActor actor, ExecutorDefinition executor) {
-        return (!executor.requirePlayer() || actor.isPlayer())
-                && (executor.permission().isBlank() || actor.hasPermission(executor.permission()));
+        return this.preflight(actor, executor) == null;
     }
 
     private CommandResult preflight(CommandActor actor, ExecutorDefinition executor) {
+        Objects.requireNonNull(actor, "actor");
         if (executor.requirePlayer() && !actor.isPlayer()) {
             return new CommandResult.PlayerOnly();
         }
@@ -542,10 +622,11 @@ public final class CommandDispatcher {
     private void traceDispatch(CommandActor actor, String label, String path, CommandResult result, long startedNanos) {
         long tookMicros = (System.nanoTime() - startedNanos) / 1_000L;
         String resultName = result.getClass().getSimpleName();
-        this.logger.info("[cf] dispatch actor=" + actor.name()
-                + " label=" + label + " path=" + path
+        this.logger.info("[cf] dispatch actor=" + LogSafety.sanitize(actor.name())
+                + " label=" + LogSafety.sanitize(label) + " path=" + path
                 + " result=" + resultName + " tookUs=" + tookMicros);
     }
+
 
     private CommandResult emit(CommandActor actor, CommandResult result) {
         switch (result) {

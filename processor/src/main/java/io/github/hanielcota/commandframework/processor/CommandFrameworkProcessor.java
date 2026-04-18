@@ -62,6 +62,8 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
     private static final String DESCRIPTOR_INTERFACE = GENERATED_PACKAGE + ".CommandDescriptor";
     /** Mirrors {@link io.github.hanielcota.commandframework.annotation.Arg#maxLength()}. */
     private static final int DEFAULT_ARG_MAX_LENGTH = 256;
+    private static final String JAVA_UTIL_OPTIONAL = "java.util.Optional";
+    private static final String JAVA_LANG_STRING = "java.lang.String";
 
     private final Set<String> generatedDescriptors = new LinkedHashSet<>();
     private final Set<String> processedCommands = new LinkedHashSet<>();
@@ -214,8 +216,18 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
         if (index != parameterCount - 1) {
             this.error(parameter, "@Arg(greedy = true) must be the last parameter.");
         }
-        if (!"java.lang.String".equals(this.resolvedTypeName(parameter))) {
+        if (!JAVA_LANG_STRING.equals(this.resolvedTypeName(parameter))) {
             this.error(parameter, "@Arg(greedy = true) only supports String parameters.");
+        }
+        boolean javaOptional = JAVA_UTIL_OPTIONAL.equals(this.erasedTypeName(parameter.asType()));
+        boolean hasOptionalAnnotation =
+                parameter.getAnnotation(io.github.hanielcota.commandframework.annotation.Optional.class) != null;
+        if (javaOptional || hasOptionalAnnotation) {
+            this.error(parameter, "@Arg(greedy = true) is not compatible with @Optional or "
+                    + "java.util.Optional<String> parameters. A greedy argument already captures zero-or-more "
+                    + "tokens and is empty when no tokens remain — layering optionality on top is ambiguous. "
+                    + "Fix: declare the parameter as a plain String and treat the empty string as 'no input' "
+                    + "inside the method body.");
         }
     }
 
@@ -237,9 +249,9 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                     + "Platform sender types (Player, CommandSender, CommandSource, ProxiedPlayer) "
                     + "are not thread-safe off the main thread. "
                     + "Fix: change the parameter to @Sender CommandActor and, inside the method, "
-                    + "re-resolve the platform sender on-demand — e.g. "
-                    + "Bukkit.getPlayer(java.util.UUID.fromString(actor.id())) on Paper, or "
-                    + "proxyServer.getPlayer(java.util.UUID.fromString(actor.id())) on Velocity. "
+                    + "re-resolve the platform sender on-demand from actor.uniqueId() — e.g. "
+                    + "Bukkit.getPlayer(actor.uniqueId()) on Paper, or "
+                    + "proxyServer.getPlayer(actor.uniqueId()) on Velocity. "
                     + "Remember the lookup may return null if the player disconnected.");
         }
     }
@@ -406,6 +418,10 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 .collect(Collectors.joining(", ")) + ")";
     }
 
+    // SECURITY: every String-typed value embedded here MUST go through stringLiteral(...) to
+    // escape backslashes, quotes and line terminators. Raw concatenation is reserved for
+    // primitive annotation types (long, boolean). Adding a String field without escaping opens
+    // Java-source injection at annotation-processing time (RCE in build).
     private String executorLiteral(
             TypeElement owner,
             ExecutableElement method,
@@ -446,11 +462,12 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 .collect(Collectors.joining(", ")) + ")";
     }
 
+    // SECURITY: see note on executorLiteral — stringLiteral() required for every String field.
     private String parameterLiteral(VariableElement parameter) {
         Arg arg = parameter.getAnnotation(Arg.class);
         io.github.hanielcota.commandframework.annotation.Optional optional =
                 parameter.getAnnotation(io.github.hanielcota.commandframework.annotation.Optional.class);
-        boolean javaOptional = "java.util.Optional".equals(this.erasedTypeName(parameter.asType()));
+        boolean javaOptional = JAVA_UTIL_OPTIONAL.equals(this.erasedTypeName(parameter.asType()));
         String resolvedTypeName = this.resolvedTypeName(parameter);
         String name = arg != null && !arg.value().isBlank()
                 ? arg.value()
@@ -474,6 +491,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 + ")";
     }
 
+    // SECURITY: see note on executorLiteral — stringLiteral() required for every String field.
     private String cooldownLiteral(Cooldown cooldown) {
         if (cooldown == null) {
             return "null";
@@ -485,6 +503,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 + ")";
     }
 
+    // SECURITY: see note on executorLiteral — stringLiteral() required for every String field.
     private String confirmLiteral(Confirm confirm) {
         if (confirm == null) {
             return "null";
@@ -501,13 +520,13 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
     }
 
     private String resolvedTypeName(VariableElement parameter) {
-        if (!"java.util.Optional".equals(this.erasedTypeName(parameter.asType()))) {
+        if (!JAVA_UTIL_OPTIONAL.equals(this.erasedTypeName(parameter.asType()))) {
             return this.erasedTypeName(parameter.asType());
         }
         if (parameter.asType() instanceof DeclaredType declaredType && !declaredType.getTypeArguments().isEmpty()) {
             return this.erasedTypeName(declaredType.getTypeArguments().getFirst());
         }
-        return "java.util.Optional";
+        return JAVA_UTIL_OPTIONAL;
     }
 
     private String erasedTypeName(TypeMirror typeMirror) {
@@ -590,6 +609,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 .replace("\"", "\\\"")
                 .replace("\r", "\\r")
                 .replace("\n", "\\n")
+                .replace("\t", "\\t")
                 + "\"";
     }
 

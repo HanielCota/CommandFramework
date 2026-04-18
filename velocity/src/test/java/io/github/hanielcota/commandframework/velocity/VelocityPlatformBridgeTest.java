@@ -5,6 +5,8 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import io.github.hanielcota.commandframework.ArgumentResolver;
 import io.github.hanielcota.commandframework.CommandActor;
+import io.github.hanielcota.commandframework.annotation.Command;
+import io.github.hanielcota.commandframework.annotation.Execute;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,13 +20,15 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings("PMD.TooManyStaticImports")
+@SuppressWarnings({"PMD.TooManyStaticImports", "EffectivelyPrivate", "UnusedMethod"})
 class VelocityPlatformBridgeTest {
 
     private final Object plugin = new PluginStub();
@@ -96,6 +100,18 @@ class VelocityPlatformBridgeTest {
     }
 
     @Test
+    @DisplayName("createActor keeps non-player identities distinct even when source classes match")
+    void createActorKeepsDistinctIdsForNonPlayers() {
+        CommandSource first = org.mockito.Mockito.mock(CommandSource.class);
+        CommandSource second = org.mockito.Mockito.mock(CommandSource.class);
+
+        CommandActor firstActor = this.bridge.createActor(first);
+        CommandActor secondActor = this.bridge.createActor(second);
+
+        assertNotEquals(firstActor.uniqueId(), secondActor.uniqueId());
+    }
+
+    @Test
     @DisplayName("createActor wraps a Player source into a player actor")
     void createActorWrapsPlayerSource() {
         Player player = org.mockito.Mockito.mock(Player.class);
@@ -132,6 +148,31 @@ class VelocityPlatformBridgeTest {
         assertSame(Player.class, resolvers.get(0).type());
     }
 
+    @Test
+    @DisplayName("register fails fast when a command label is already taken")
+    void registerFailsFastOnCommandCollision() {
+        com.velocitypowered.api.command.CommandManager manager =
+                org.mockito.Mockito.mock(com.velocitypowered.api.command.CommandManager.class);
+        when(this.server.getCommandManager()).thenReturn(manager);
+        when(manager.hasCommand("taken")).thenReturn(true);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> VelocityCommandFramework.velocity(this.server, this.plugin)
+                        .command(new TakenCommand())
+                        .build()
+        );
+
+        assertTrue(exception.getMessage().contains("taken"));
+    }
+
     private static final class PluginStub {
+    }
+
+    @Command(name = "taken")
+    private static final class TakenCommand {
+        @Execute
+        public void execute() {
+        }
     }
 }

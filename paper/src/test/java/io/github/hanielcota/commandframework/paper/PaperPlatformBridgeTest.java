@@ -19,6 +19,7 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
@@ -103,6 +104,20 @@ class PaperPlatformBridgeTest {
         assertTrue(actor.isAvailable());
         assertSame(sender, actor.platformSender());
         assertNotNull(actor.uniqueId());
+    }
+
+    @Test
+    @DisplayName("createActor keeps non-player identities distinct even when names match")
+    void createActorKeepsDistinctIdsForNonPlayersWithSameName() {
+        CommandSender first = org.mockito.Mockito.mock(CommandSender.class);
+        CommandSender second = org.mockito.Mockito.mock(CommandSender.class);
+        when(first.getName()).thenReturn("CONSOLE");
+        when(second.getName()).thenReturn("CONSOLE");
+
+        CommandActor firstActor = this.bridge.createActor(first);
+        CommandActor secondActor = this.bridge.createActor(second);
+
+        assertNotEquals(firstActor.uniqueId(), secondActor.uniqueId());
     }
 
     @Test

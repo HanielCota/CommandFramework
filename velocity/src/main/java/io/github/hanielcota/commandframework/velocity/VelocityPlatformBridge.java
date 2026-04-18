@@ -30,6 +30,10 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
     // Velocity proxies Bedrock clients whose names include '.' and '*', so the resolver
     // only enforces an upper bound and defers existence checks to the proxy lookup.
     private static final int MAX_PLAYER_NAME_LENGTH = 32;
+    // Name of the single greedy-string Brigadier argument used to forward the raw tail of
+    // every framework-registered command. Referenced both where the argument is declared and
+    // where it is retrieved from the parsed context — keep both sides in sync.
+    private static final String GREEDY_ARG_NAME = "args";
 
     private final ProxyServer server;
     private final Object plugin;
@@ -82,31 +86,32 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
     public void register(CommandFramework<CommandSource> framework) {
         CommandManager manager = this.server.getCommandManager();
         for (RegisteredCommand command : framework.registeredCommands()) {
-            this.logCollision(manager, command.name());
-            command.aliases().forEach(alias -> this.logCollision(manager, alias));
+            this.assertNoCollision(manager, command.name());
+            command.aliases().forEach(alias -> this.assertNoCollision(manager, alias));
 
             BrigadierCommand brigadierCommand = new BrigadierCommand(this.builder(framework, command));
             CommandMeta meta = manager.metaBuilder(command.name())
                     .plugin(this.plugin)
                     .aliases(command.aliases().toArray(String[]::new))
                     .build();
-            this.tryRegister(manager, meta, brigadierCommand, command.name());
+            this.registerOrThrow(manager, meta, brigadierCommand, command.name());
         }
         for (String confirmationLabel : framework.confirmationCommandLabels()) {
-            this.logCollision(manager, confirmationLabel);
+            this.assertNoCollision(manager, confirmationLabel);
             BrigadierCommand brigadierCommand = new BrigadierCommand(this.confirmationBuilder(framework, confirmationLabel));
             CommandMeta meta = manager.metaBuilder(confirmationLabel)
                     .plugin(this.plugin)
                     .build();
-            this.tryRegister(manager, meta, brigadierCommand, confirmationLabel);
+            this.registerOrThrow(manager, meta, brigadierCommand, confirmationLabel);
         }
     }
 
-    private void tryRegister(CommandManager manager, CommandMeta meta, BrigadierCommand command, String label) {
+    private void registerOrThrow(CommandManager manager, CommandMeta meta, BrigadierCommand command, String label) {
         try {
             manager.register(meta, command);
         } catch (RuntimeException exception) {
-            this.logger.error("Failed to register command '" + label + "' with the Velocity proxy", exception);
+            throw new IllegalStateException(
+                    "Failed to register command '" + label + "' with the Velocity proxy", exception);
         }
     }
 
@@ -120,13 +125,13 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
                     return 1;
                 });
 
-        var args = BrigadierCommand.requiredArgumentBuilder("args", StringArgumentType.greedyString())
+        var args = BrigadierCommand.requiredArgumentBuilder(GREEDY_ARG_NAME, StringArgumentType.greedyString())
                 .suggests((context, builder) -> {
                     framework.suggest(context.getSource(), command.name(), builder.getRemaining()).forEach(builder::suggest);
                     return builder.buildFuture();
                 })
                 .executes(context -> {
-                    framework.dispatch(context.getSource(), command.name(), StringArgumentType.getString(context, "args"));
+                    framework.dispatch(context.getSource(), command.name(), StringArgumentType.getString(context, GREEDY_ARG_NAME));
                     return 1;
                 });
 
@@ -145,7 +150,7 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
                 });
     }
 
-    private void logCollision(CommandManager manager, String label) {
+    private void assertNoCollision(CommandManager manager, String label) {
         if (!manager.hasCommand(label)) {
             return;
         }
@@ -153,10 +158,9 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
         Object owner = meta != null ? meta.getPlugin() : null;
         if (owner != null) {
             String ownerClassName = owner.getClass().getName();
-            this.logger.warn("Command registration conflict for '" + label + "' with " + ownerClassName);
-            return;
+            throw new IllegalStateException("Command registration conflict for '" + label + "' with " + ownerClassName);
         }
-        this.logger.warn("Command registration conflict for '" + label + "'");
+        throw new IllegalStateException("Command registration conflict for '" + label + "'");
     }
 
     private static final class VelocityActor implements CommandActor {
@@ -179,7 +183,10 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
             if (this.source instanceof Player player) {
                 return player.getUniqueId();
             }
-            return UUID.nameUUIDFromBytes(("velocity:" + this.name()).getBytes(StandardCharsets.UTF_8));
+            return UUID.nameUUIDFromBytes((
+                    "velocity:" + this.source.getClass().getName()
+                            + ":" + Integer.toHexString(System.identityHashCode(this.source)))
+                    .getBytes(StandardCharsets.UTF_8));
         }
 
         @Override

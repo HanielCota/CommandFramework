@@ -23,6 +23,7 @@ import java.util.UUID;
  */
 public final class RateLimiter {
 
+
     private final int limit;
     private final Duration window;
     private final FrameworkLogger logger;
@@ -74,7 +75,7 @@ public final class RateLimiter {
             return false;
         }
 
-        this.logger.debug("Silently rate-limited command execution for " + actor.name());
+        this.logger.debug("Silently rate-limited command execution for " + LogSafety.sanitize(actor.name()));
         return true;
     }
 

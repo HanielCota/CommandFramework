@@ -405,9 +405,16 @@ public final class HomeCommand {
 
     @Execute
     @Async                        // runs on a virtual thread — safe for DB/HTTP
-    public void home(@Sender Player player) {
-        Location h = database.loadHome(player.getUniqueId());
-        player.teleport(h);       // sendMessage auto-hops back to the main thread
+    public void home(@Sender CommandActor actor) {
+        UUID playerId = actor.uniqueId();
+        Location h = database.loadHome(playerId);
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null) {
+                player.teleport(h);
+            }
+        });
     }
 }
 ```
@@ -739,8 +746,9 @@ functions). Kotlin `Unit` return types are treated as `void`.
 Only if *your* command body does. Use `@Async` for DB/network calls.
 
 **How do I write multi-level subcommands like `/admin player ban`?**
-Use dotted `sub` values: `@Execute(sub = "player ban")`. The dispatcher
-matches deepest-first.
+You don't. `@Execute(sub = "...")` accepts a single token only. Use a
+single label such as `player_ban` / `playerban`, or split the flow across
+separate commands.
 
 **Where are commands declared for `plugin.yml` / `paper-plugin.yml`?**
 They aren't. The framework registers them directly with Paper's Brigadier
@@ -856,7 +864,8 @@ when you want deterministic suggestions.
 > classes, `@Execute` on methods, `@Sender Player` as the first parameter.
 > Never declare commands in `plugin.yml`. Never use `JavaPlugin.getCommand()`,
 > `CommandExecutor`, or `TabExecutor`. Messages are MiniMessage templates
-> (`<red>`, `<click:run_command:'/foo'>`). Use `@Async` for DB/HTTP — never
+> (`<red>`, `<click:run_command:'/foo'>`). Use `@Async` for DB/HTTP and hop
+> back to the Paper main thread before touching thread-confined APIs.
 > `Bukkit.getScheduler()`. For the full API reference, consult `llms.txt` at
 > the repository root. If a feature is missing from that reference, say so
 > instead of inventing annotations.

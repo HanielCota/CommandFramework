@@ -18,13 +18,18 @@ import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Server;
+import org.bukkit.block.Block;
+import org.bukkit.command.BlockCommandSender;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
+import org.bukkit.command.RemoteConsoleCommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +41,10 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
     // Bedrock/Floodgate usernames legitimately include '.' and '*', so the resolver
     // only enforces an upper bound and defers existence checks to the server lookup.
     private static final int MAX_PLAYER_NAME_LENGTH = 32;
+    // Name of the single greedy-string Brigadier argument used to forward the raw tail of
+    // every framework-registered command. Referenced both where the argument is declared and
+    // where it is retrieved from the parsed context — keep both sides in sync.
+    private static final String GREEDY_ARG_NAME = "args";
 
     private final JavaPlugin plugin;
     private final Server server;
@@ -91,12 +100,12 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
             for (RegisteredCommand command : framework.registeredCommands()) {
                 LiteralCommandNode<CommandSourceStack> node = this.node(framework, command).build();
                 Set<String> registered = commands.register(node, command.description(), command.aliases());
-                this.logRegistrationConflicts(commands, command, registered);
+                this.assertRegistered(commands, command, registered);
             }
             for (String confirmationLabel : framework.confirmationCommandLabels()) {
                 LiteralCommandNode<CommandSourceStack> node = this.confirmationNode(framework, confirmationLabel).build();
                 Set<String> registered = commands.register(node, "Framework confirmation command", List.of());
-                this.logRegistrationConflicts(commands, confirmationLabel, registered);
+                this.assertRegistered(commands, confirmationLabel, registered);
             }
         });
     }
@@ -111,7 +120,7 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
                     return 1;
                 });
 
-        var args = Commands.argument("args", StringArgumentType.greedyString())
+        var args = Commands.argument(GREEDY_ARG_NAME, StringArgumentType.greedyString())
                 .suggests((context, builder) -> {
                     framework.suggest(context.getSource().getSender(), command.name(), builder.getRemaining())
                             .forEach(builder::suggest);
@@ -121,7 +130,7 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
                     framework.dispatch(
                             context.getSource().getSender(),
                             command.name(),
-                            StringArgumentType.getString(context, "args")
+                            StringArgumentType.getString(context, GREEDY_ARG_NAME)
                     );
                     return 1;
                 });
@@ -140,19 +149,46 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
                 });
     }
 
-    private void logRegistrationConflicts(
+    private void assertRegistered(
             Commands commands,
             RegisteredCommand command,
             Set<String> registered
     ) {
-        this.logRegistrationConflicts(commands, command.name(), command.aliases(), registered);
+        this.assertRegistered(commands, command.name(), command.aliases(), registered);
     }
 
-    private void logRegistrationConflicts(Commands commands, String label, Set<String> registered) {
-        this.logRegistrationConflicts(commands, label, List.of(), registered);
+    private void assertRegistered(Commands commands, String label, Set<String> registered) {
+        this.assertRegistered(commands, label, List.of(), registered);
     }
 
-    private void logRegistrationConflicts(Commands commands, String label, List<String> aliases, Set<String> registered) {
+    private void assertRegistered(Commands commands, String label, List<String> aliases, Set<String> registered) {
+        Set<String> normalized = this.normalizedRegisteredLabels(registered);
+        List<String> missing = new ArrayList<>();
+        if (!normalized.contains(label.toLowerCase(Locale.ROOT))) {
+            missing.add(label);
+        }
+        for (String alias : aliases) {
+            if (!normalized.contains(alias.toLowerCase(Locale.ROOT))) {
+                missing.add(alias);
+            }
+        }
+        if (missing.isEmpty()) {
+            return;
+        }
+        StringBuilder message = new StringBuilder("Paper command registration conflict. Could not register ");
+        for (int index = 0; index < missing.size(); index++) {
+            if (index > 0) {
+                message.append(", ");
+            }
+            String missingLabel = missing.get(index);
+            message.append('\'').append(missingLabel).append('\'')
+                    .append(this.conflictDetails(commands, missingLabel));
+        }
+        message.append(". Rename the conflicting command or alias.");
+        throw new IllegalStateException(message.toString());
+    }
+
+    private Set<String> normalizedRegisteredLabels(Set<String> registered) {
         Set<String> normalized = new LinkedHashSet<>();
 
         for (String value : registered) {
@@ -163,15 +199,7 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
                 normalized.add(value.substring(separatorIndex + 1).toLowerCase(Locale.ROOT));
             }
         }
-
-        if (!normalized.contains(label.toLowerCase(Locale.ROOT))) {
-            this.logger().warn("Command registration conflict for '" + label + "'" + this.conflictDetails(commands, label));
-        }
-        for (String alias : aliases) {
-            if (!normalized.contains(alias.toLowerCase(Locale.ROOT))) {
-                this.logger().warn("Command alias registration conflict for '" + alias + "'" + this.conflictDetails(commands, alias));
-            }
-        }
+        return normalized;
     }
 
     private String conflictDetails(Commands commands, String label) {
@@ -203,10 +231,7 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
 
         @Override
         public UUID uniqueId() {
-            if (this.sender instanceof Entity entity) {
-                return entity.getUniqueId();
-            }
-            return UUID.nameUUIDFromBytes(("paper:" + this.sender.getName()).getBytes(StandardCharsets.UTF_8));
+            return senderUniqueId(this.sender);
         }
 
         @Override
@@ -224,12 +249,21 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
             if (!this.isAvailable()) {
                 return;
             }
-            if (Thread.currentThread().isVirtual()) {
-                this.server.getGlobalRegionScheduler().execute(this.plugin, () -> {
-                    if (this.isAvailable()) {
-                        this.sender.sendMessage(message);
-                    }
-                });
+            if (!this.server.isPrimaryThread()) {
+                if (!this.plugin.isEnabled()) {
+                    return;
+                }
+                try {
+                    this.server.getGlobalRegionScheduler().execute(this.plugin, () -> {
+                        if (this.isAvailable()) {
+                            this.sender.sendMessage(message);
+                        }
+                    });
+                } catch (IllegalStateException | IllegalArgumentException ignored) {
+                    // Plugin was disabled between the isEnabled() check and the schedule call.
+                    // The scheduler rejects tasks for disabled plugins; dropping is correct because
+                    // there is no main-thread context left to deliver the message on.
+                }
                 return;
             }
             this.sender.sendMessage(message);
@@ -243,6 +277,32 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
         @Override
         public Object platformSender() {
             return this.sender;
+        }
+
+        private static UUID senderUniqueId(CommandSender sender) {
+            if (sender instanceof Entity entity) {
+                return entity.getUniqueId();
+            }
+            return UUID.nameUUIDFromBytes(senderIdentityKey(sender).getBytes(StandardCharsets.UTF_8));
+        }
+
+        private static String senderIdentityKey(CommandSender sender) {
+            if (sender instanceof RemoteConsoleCommandSender) {
+                return "paper:remote-console";
+            }
+            if (sender instanceof ConsoleCommandSender) {
+                return "paper:console";
+            }
+            if (sender instanceof BlockCommandSender blockSender) {
+                Block block = blockSender.getBlock();
+                return "paper:command-block:" + block.getWorld().getUID()
+                        + ":" + block.getX()
+                        + ":" + block.getY()
+                        + ":" + block.getZ();
+            }
+            return "paper:" + sender.getClass().getName()
+                    + ":" + sender.getName()
+                    + ":" + Integer.toHexString(System.identityHashCode(sender));
         }
     }
 
@@ -267,8 +327,13 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
 
         @Override
         public List<String> suggest(CommandActor actor, String currentInput) {
+            // Respect Player#canSee so vanished/hidden players are not leaked through
+            // tab completion. When the actor is not a player (console, command block),
+            // no visibility filter applies.
             String lowered = currentInput.toLowerCase(Locale.ROOT);
+            Player viewer = actor.platformSender() instanceof Player p ? p : null;
             return this.server.getOnlinePlayers().stream()
+                    .filter(target -> viewer == null || viewer.canSee(target))
                     .map(Player::getName)
                     .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(lowered))
                     .sorted()

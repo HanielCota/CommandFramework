@@ -9,6 +9,15 @@ import java.util.Objects;
 
 /**
  * Provides framework message templates.
+ *
+ * <p><b>Trust boundary — IMPORTANT:</b> templates returned by this provider are fed directly to
+ * the MiniMessage deserializer. MiniMessage tags such as {@code <click:run_command:…>},
+ * {@code <hover:…>} and {@code <insert:…>} are interpreted as interactive components. Only
+ * placeholder <i>values</i> injected by the framework are escaped at render time — templates
+ * themselves are NOT. Load templates only from sources you trust (code, plugin-bundled
+ * resources, admin-reviewed config). Never source them from untrusted input (user chat, web
+ * forms, databases with user-writable rows) without sanitising the strings first via
+ * {@code MiniMessage.miniMessage().escapeTags(raw)}.
  */
 @FunctionalInterface
 public interface MessageProvider {

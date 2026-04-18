@@ -190,6 +190,81 @@ class CommandFrameworkProcessorTest {
     }
 
     @Test
+    void greedyWithOptionalAnnotationFailsCompilation() throws IOException {
+        CompilationResult result = this.compile("GreedyOptionalCommand.java", """
+                package example;
+
+                import io.github.hanielcota.commandframework.annotation.Arg;
+                import io.github.hanielcota.commandframework.annotation.Command;
+                import io.github.hanielcota.commandframework.annotation.Execute;
+                import io.github.hanielcota.commandframework.annotation.Optional;
+
+                @Command(name = "greedyopt")
+                public final class GreedyOptionalCommand {
+                    @Execute
+                    public void execute(@Optional("x") @Arg(greedy = true) String rest) {
+                    }
+                }
+                """);
+
+        assertFalse(result.success(),
+                "greedy + @Optional should be rejected — the combination is ambiguous");
+        assertTrue(result.messages().stream().anyMatch(message ->
+                        message.contains("greedy") && message.contains("@Optional")),
+                () -> "expected greedy+@Optional diagnostic, got: " + result.messages());
+    }
+
+    @Test
+    void greedyWithJavaOptionalTypeFailsCompilation() throws IOException {
+        CompilationResult result = this.compile("GreedyJavaOptionalCommand.java", """
+                package example;
+
+                import io.github.hanielcota.commandframework.annotation.Arg;
+                import io.github.hanielcota.commandframework.annotation.Command;
+                import io.github.hanielcota.commandframework.annotation.Execute;
+                import java.util.Optional;
+
+                @Command(name = "greedyjopt")
+                public final class GreedyJavaOptionalCommand {
+                    @Execute
+                    public void execute(@Arg(greedy = true) Optional<String> rest) {
+                    }
+                }
+                """);
+
+        assertFalse(result.success(),
+                "greedy + Optional<String> should be rejected — the combination is ambiguous");
+        assertTrue(result.messages().stream().anyMatch(message ->
+                        message.contains("greedy") && message.contains("java.util.Optional")),
+                () -> "expected greedy+Optional diagnostic, got: " + result.messages());
+    }
+
+    @Test
+    void descriptionWithQuotesAndNewlinesDoesNotBreakGeneratedSource() throws IOException {
+        // Hardening: ensures stringLiteral() escaping keeps generated code valid even when
+        // developer-supplied annotation strings contain Java-source metacharacters. A regression
+        // here would enable source injection at annotation-processing time.
+        CompilationResult result = this.compile("QuotedDescriptionCommand.java", """
+                package example;
+
+                import io.github.hanielcota.commandframework.annotation.Command;
+                import io.github.hanielcota.commandframework.annotation.Description;
+                import io.github.hanielcota.commandframework.annotation.Execute;
+
+                @Command(name = "quoted", description = "has \\"quotes\\" and\\nnewline")
+                public final class QuotedDescriptionCommand {
+                    @Execute
+                    @Description("sub \\"desc\\" \\\\ backslash")
+                    public void execute() {
+                    }
+                }
+                """);
+
+        assertTrue(result.success(),
+                () -> "generator must escape metacharacters; got: " + result.messages());
+    }
+
+    @Test
     void validCommandGeneratesDescriptorService() throws IOException {
         CompilationResult result = this.compile("ValidCommand.java", """
                 package example;
