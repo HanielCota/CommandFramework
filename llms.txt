@@ -2,7 +2,7 @@
 
 Last-Reviewed: 2026-04-18 (v0.2.1)
 
-> Version: 0.2.0 · Java 25 · Paper 1.21+ and Velocity 3.4 · MIT license
+> Version: 0.2.2 · Java 25 · Paper 1.21+ and Velocity 3.4 · MIT license
 > Full README: https://github.com/HanielCota/CommandFramework/blob/main/README.md
 > This file follows the llms.txt convention (https://llmstxt.org).
 
@@ -29,8 +29,8 @@ repositories {
     maven("https://jitpack.io")
 }
 dependencies {
-    implementation("io.github.hanielcota.commandframework:paper:0.2.0")
-    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:paper:0.2.2")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.2")
 }
 ```
 
@@ -254,7 +254,7 @@ public interface CommandActor {
 ## Testing - `core-testkit`
 
 ```kotlin
-testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.0")
+testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.2")
 ```
 
 ```java

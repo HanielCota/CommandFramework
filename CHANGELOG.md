@@ -7,10 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-04-18
+
+### Added
+
+- **Descriptor format-version gate** - the annotation processor now stamps
+  generated `CommandDescriptor` output with a format version, and
+  `InternalCommandBuilder#verifyDescriptorFormatVersion` enforces compatibility
+  at plugin load. Prevents silently running against stale code-gen output;
+  mismatched descriptors fail fast with an actionable error.
+
 ### Changed
 
 - **`CommandDispatcher` split into four focused classes** - the dispatcher
-  down from 768 - now delegates to `CommandSuggestionEngine` (tab-completion +
+  (down from 768 lines) now delegates to `CommandSuggestionEngine` (tab-completion +
   did-you-mean), `ArgumentPreparer` (argument parsing, sender binding, enum
   resolver cache), and `CommandResultEmitter` (result rendering, help listing).
   No behavioural change; each collaborator is now unit-testable in isolation.
@@ -18,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TooManyArgumentsException`, `PlayerOnlySignal`) are now package-private
   nested types of `ArgumentPreparer`. 13 new unit tests added across the three
   collaborators.
+- **Async dispatch** - extracted `safelyEmit` helper to centralise
+  exception-to-result conversion; the `traceDispatch` log format is now
+  documented as a stable contract.
+- **CI** - Javadoc compilation and example-plugin builds are gated on every
+  PR; Dependabot is configured for weekly Gradle and GitHub Actions updates.
+- **Test coverage** - added unit tests for `CooldownManager`,
+  `ConfirmationManager`, `RateLimiter`, broader `CommandResultEmitter`
+  variants, and Paper/Velocity player-suggest visibility filter edge cases.
+
+### Fixed
+
+- **`examples/velocity-sample` KickCommand** - aligned with the processor rule
+  that rejects `@Arg(greedy = true)` combined with `@Optional`.
 
 ## [0.2.1] - 2026-04-18
 

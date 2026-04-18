@@ -119,16 +119,16 @@ dependencyResolutionManagement {
 **`build.gradle.kts` (Paper plugin):**
 ```kotlin
 dependencies {
-    implementation("io.github.hanielcota.commandframework:paper:0.2.0")
-    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:paper:0.2.2")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.2")
 }
 ```
 
 **`build.gradle.kts` (Velocity plugin):**
 ```kotlin
 dependencies {
-    implementation("io.github.hanielcota.commandframework:velocity:0.2.0")
-    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:velocity:0.2.2")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.2")
 }
 ```
 
@@ -146,12 +146,12 @@ annotation processor, Java 25 toolchain) for you:
 ```kotlin
 plugins {
     java
-    id("io.github.hanielcota.commandframework") version "0.2.0"
+    id("io.github.hanielcota.commandframework") version "0.2.2"
 }
 
 commandframework {
     platform.set("paper")   // or "velocity"
-    version.set("0.2.0")
+    version.set("0.2.2")
 }
 ```
 
@@ -169,12 +169,12 @@ commandframework {
     <dependency>
         <groupId>io.github.hanielcota.commandframework</groupId>
         <artifactId>paper</artifactId>
-        <version>0.2.0</version>
+        <version>0.2.2</version>
     </dependency>
     <dependency>
         <groupId>io.github.hanielcota.commandframework</groupId>
         <artifactId>processor</artifactId>
-        <version>0.2.0</version>
+        <version>0.2.2</version>
         <scope>provided</scope>
     </dependency>
 </dependencies>
@@ -599,7 +599,7 @@ Add the testkit to your `testImplementation` so you can unit-test commands
 without starting a server:
 
 ```kotlin
-testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.0")
+testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.2")
 ```
 
 ```java
@@ -858,7 +858,7 @@ when you want deterministic suggestions.
 
 ### Prompt template (copy-paste)
 
-> You are writing a Paper 1.21+ plugin using **CommandFramework 0.2.0**
+> You are writing a Paper 1.21+ plugin using **CommandFramework 0.2.2**
 > (https://github.com/HanielCota/CommandFramework). Always import annotations
 > from `io.github.hanielcota.commandframework.annotation.*`. Use `@Command` on
 > classes, `@Execute` on methods, `@Sender Player` as the first parameter.
