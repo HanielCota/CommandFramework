@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -117,7 +118,7 @@ class CommandResultEmitterTest {
         when(messages.renderLines(any(Component[].class))).thenReturn(aggregated);
         CommandResultEmitter emitter = new CommandResultEmitter(
                 messages,
-                (actor, executor) -> executor != deniedSubcommand);
+                (actor, executor) -> !Objects.equals(executor, deniedSubcommand));
         CommandActor actor = mock(CommandActor.class);
 
         emitter.sendHelp(actor, command, "test");

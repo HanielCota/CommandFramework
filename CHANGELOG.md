@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **`CommandDispatcher` split into four focused classes** - the dispatcher
-  (~355 lines) now delegates to `CommandSuggestionEngine` (tab-completion +
+  down from 768 - now delegates to `CommandSuggestionEngine` (tab-completion +
   did-you-mean), `ArgumentPreparer` (argument parsing, sender binding, enum
   resolver cache), and `CommandResultEmitter` (result rendering, help listing).
   No behavioural change; each collaborator is now unit-testable in isolation.
