@@ -54,6 +54,13 @@ public final class InternalCommandBuilder<S> {
 
     private static final int DEFAULT_MAX_ARG_LENGTH = 256;
     private static final Pattern VALID_LABEL = Pattern.compile("[a-zA-Z0-9_-]+");
+    /**
+     * Highest {@code FORMAT_VERSION} this runtime accepts on a generated descriptor. Descriptors
+     * without the field (built by older processors) are treated as version 1. Descriptors with
+     * a higher version are rejected because their shape may contain members this runtime does
+     * not understand.
+     */
+    private static final int SUPPORTED_DESCRIPTOR_FORMAT_VERSION = 1;
 
     private final PlatformBridge<S> bridge;
     private final DependencyContainer dependencies;
@@ -200,6 +207,7 @@ public final class InternalCommandBuilder<S> {
     private Map<Class<?>, CommandDescriptor> loadGeneratedDescriptors() {
         Map<Class<?>, CommandDescriptor> descriptors = new LinkedHashMap<>();
         ServiceLoader.load(CommandDescriptor.class, this.bridge.classLoader()).forEach(descriptor -> {
+            this.verifyDescriptorFormatVersion(descriptor);
             Class<?> type = descriptor.commandType();
             CommandDescriptor previous = descriptors.putIfAbsent(type, descriptor);
             if (previous != null) {
@@ -207,6 +215,31 @@ public final class InternalCommandBuilder<S> {
             }
         });
         return Map.copyOf(descriptors);
+    }
+
+    /**
+     * Soft-validate the descriptor format version. A missing field is tolerated (pre-versioned
+     * descriptors from older builds are treated as version 1). A version greater than the one
+     * this runtime knows about is rejected so consumers get a clear error rather than a
+     * confusing {@link NoSuchMethodError} from a newer descriptor shape.
+     */
+    private void verifyDescriptorFormatVersion(CommandDescriptor descriptor) {
+        int version;
+        try {
+            Field field = descriptor.getClass().getDeclaredField("FORMAT_VERSION");
+            version = field.getInt(null);
+        } catch (NoSuchFieldException exception) {
+            return;
+        } catch (IllegalAccessException exception) {
+            throw new IllegalStateException("Unable to read FORMAT_VERSION from descriptor "
+                    + descriptor.getClass().getName(), exception);
+        }
+        if (version > SUPPORTED_DESCRIPTOR_FORMAT_VERSION) {
+            throw new IllegalStateException("Generated descriptor "
+                    + descriptor.getClass().getName() + " declares FORMAT_VERSION=" + version
+                    + " but this runtime only supports up to " + SUPPORTED_DESCRIPTOR_FORMAT_VERSION
+                    + ". Rebuild your plugin against a matching CommandFramework version.");
+        }
     }
 
     private List<CommandDescriptor> scannedDescriptors(Map<Class<?>, CommandDescriptor> descriptors) {
