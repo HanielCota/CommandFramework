@@ -7,6 +7,11 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    ignore:
+      # velocity-api:4.0.0-SNAPSHOT is a stale 2021 pre-release with a
+      # broken transitive (net.kyori:coffee:1.0.0-SNAPSHOT). Track 3.x only.
+      - dependency-name: "com.velocitypowered:velocity-api"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
