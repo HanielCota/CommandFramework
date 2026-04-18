@@ -43,8 +43,11 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
     private static final int MAX_PLAYER_NAME_LENGTH = 32;
     // Name of the single greedy-string Brigadier argument used to forward the raw tail of
     // every framework-registered command. Referenced both where the argument is declared and
-    // where it is retrieved from the parsed context — keep both sides in sync.
+    // where it is retrieved from the parsed context - keep both sides in sync.
     private static final String GREEDY_ARG_NAME = "args";
+    // Initial StringBuilder capacity for the command-collision error message. Covers the fixed
+    // prefix/suffix plus a couple of labels with conflict details before the buffer needs to grow.
+    private static final int CONFLICT_MESSAGE_CAPACITY = 256;
 
     private final JavaPlugin plugin;
     private final Server server;
@@ -175,7 +178,8 @@ final class PaperPlatformBridge implements PlatformBridge<CommandSender> {
         if (missing.isEmpty()) {
             return;
         }
-        StringBuilder message = new StringBuilder("Paper command registration conflict. Could not register ");
+        StringBuilder message = new StringBuilder(CONFLICT_MESSAGE_CAPACITY)
+                .append("Paper command registration conflict. Could not register ");
         for (int index = 0; index < missing.size(); index++) {
             if (index > 0) {
                 message.append(", ");

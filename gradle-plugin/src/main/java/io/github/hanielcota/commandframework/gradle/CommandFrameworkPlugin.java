@@ -73,7 +73,7 @@ public final class CommandFrameworkPlugin implements Plugin<Project> {
         return switch (normalized) {
             case "paper", "velocity", "core" -> normalized;
             default -> throw new IllegalArgumentException(
-                    "commandframework.platform must be one of: paper, velocity, core — got: " + platform);
+                    "commandframework.platform must be one of: paper, velocity, core - got: " + platform);
         };
     }
 }

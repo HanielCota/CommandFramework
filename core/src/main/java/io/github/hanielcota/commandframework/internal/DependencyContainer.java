@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Lookups first try an exact-type hit; on miss they fall back to a single assignable binding.
  * Ambiguous assignable matches (more than one binding whose concrete type is assignable to the
- * requested type) throw {@link IllegalStateException} rather than returning a best guess — this
+ * requested type) throw {@link IllegalStateException} rather than returning a best guess - this
  * guarantees command classes always receive the exact collaborator the operator bound, even as
  * bindings accumulate.
  *

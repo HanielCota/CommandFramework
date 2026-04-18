@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.BiPredicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -146,6 +147,53 @@ class VelocityPlatformBridgeTest {
 
         assertEquals(1, resolvers.size());
         assertSame(Player.class, resolvers.get(0).type());
+    }
+
+    @Test
+    @DisplayName("player resolver honors the custom visibility filter during suggest")
+    void playerResolverAppliesVisibilityFilter() {
+        Player visible = org.mockito.Mockito.mock(Player.class);
+        when(visible.isActive()).thenReturn(true);
+        when(visible.getUsername()).thenReturn("alice");
+
+        Player hidden = org.mockito.Mockito.mock(Player.class);
+        when(hidden.isActive()).thenReturn(true);
+        when(hidden.getUsername()).thenReturn("alice-shadow");
+
+        when(this.server.getAllPlayers()).thenReturn(List.of(visible, hidden));
+
+        BiPredicate<CommandActor, Player> hideShadow = (actor, target) -> !target.getUsername().endsWith("-shadow");
+        VelocityPlatformBridge filteredBridge = new VelocityPlatformBridge(this.server, this.plugin, hideShadow);
+
+        @SuppressWarnings("unchecked")
+        ArgumentResolver<Player> resolver = (ArgumentResolver<Player>) filteredBridge.platformResolvers().get(0);
+        CommandActor caller = org.mockito.Mockito.mock(CommandActor.class);
+
+        List<String> suggestions = resolver.suggest(caller, "ali");
+
+        assertEquals(List.of("alice"), suggestions);
+    }
+
+    @Test
+    @DisplayName("default visibility filter suggests every online player")
+    void defaultVisibilityFilterIncludesAllPlayers() {
+        Player alice = org.mockito.Mockito.mock(Player.class);
+        when(alice.isActive()).thenReturn(true);
+        when(alice.getUsername()).thenReturn("alice");
+
+        Player bob = org.mockito.Mockito.mock(Player.class);
+        when(bob.isActive()).thenReturn(true);
+        when(bob.getUsername()).thenReturn("alicia");
+
+        when(this.server.getAllPlayers()).thenReturn(List.of(alice, bob));
+
+        @SuppressWarnings("unchecked")
+        ArgumentResolver<Player> resolver = (ArgumentResolver<Player>) this.bridge.platformResolvers().get(0);
+        CommandActor caller = org.mockito.Mockito.mock(CommandActor.class);
+
+        List<String> suggestions = resolver.suggest(caller, "ali");
+
+        assertEquals(List.of("alice", "alicia"), suggestions);
     }
 
     @Test

@@ -1,4 +1,4 @@
-# CommandFramework — LLM reference
+# CommandFramework - LLM reference
 
 > Version: 0.2.0 · Java 25 · Paper 1.21+ and Velocity 3.4 · MIT license
 > Full README: https://github.com/HanielCota/CommandFramework/blob/main/README.md
@@ -15,7 +15,7 @@ CommandFramework is an annotation-driven command library for Paper and Velocity 
 - `@Sender` parameter must be the **first** parameter (or the first unambiguous sender type).
 - Only one `@Arg(greedy = true)` per method and it **must** be the last parameter.
 - `@Inject` fields must be non-`final`, non-`static`, and the bound type must be registered via `builder.bind(...)` (or be `JavaPlugin` / `ProxyServer`, both pre-bound).
-- Cooldowns are only recorded on successful execution — typo-friendly.
+- Cooldowns are only recorded on successful execution - typo-friendly.
 - Placeholders use curly braces `{name}` and are substituted BEFORE MiniMessage parsing, so they can safely appear inside `<click>` / `<hover>` tags.
 
 ## Installation (Gradle Kotlin DSL, Paper)
@@ -128,13 +128,13 @@ public final class MyProxyPlugin {
 @interface Description { String value(); } // Shown in auto-generated help.
 ```
 
-## Builder API — `CommandFrameworkBuilder<S, B>`
+## Builder API - `CommandFrameworkBuilder<S, B>`
 
 Returned by `PaperCommandFramework.paper(plugin)` or `VelocityCommandFramework.velocity(server, plugin)`. All methods return `this`.
 
 | Method | Notes |
 |---|---|
-| `scanPackage(String pkg)` | Scan a Java package for `@Command` classes. Uses generated descriptors — requires annotation processor. |
+| `scanPackage(String pkg)` | Scan a Java package for `@Command` classes. Uses generated descriptors - requires annotation processor. |
 | `command(Object instance)` | Register a single pre-built command. Use when DI happens outside the framework. |
 | `commands(Object... instances)` | Register several pre-built commands. |
 | `bind(Class<T> type, T instance)` | Register a service for `@Inject` and resolver constructors. |
@@ -146,7 +146,7 @@ Returned by `PaperCommandFramework.paper(plugin)` or `VelocityCommandFramework.v
 | `debug(boolean on)` | Log each dispatch phase. |
 | `build()` | Validate, register, return `CommandFramework<S>`. |
 
-## Results — sealed `CommandResult`
+## Results - sealed `CommandResult`
 
 ```java
 sealed interface CommandResult permits Success, Handled, Failure, InvalidArgs,
@@ -154,23 +154,23 @@ sealed interface CommandResult permits Success, Handled, Failure, InvalidArgs,
         HelpShown, RateLimited {}
 ```
 
-You rarely inspect them directly — messages and flow are automatic. Tests and middlewares do pattern-match them.
+You rarely inspect them directly - messages and flow are automatic. Tests and middlewares do pattern-match them.
 
-## MessageKey — exhaustive list
+## MessageKey - exhaustive list
 
 Enum `io.github.hanielcota.commandframework.MessageKey`:
 
 | Key | Placeholders | Fires when |
 |---|---|---|
-| `PLAYER_ONLY` | — | Non-player ran a `@RequirePlayer` command. |
-| `NO_PERMISSION` | — | Sender missed `@Permission`. |
+| `PLAYER_ONLY` | - | Non-player ran a `@RequirePlayer` command. |
+| `NO_PERMISSION` | - | Sender missed `@Permission`. |
 | `INVALID_ARGUMENT` | `{name}`, `{input}` | Resolver rejected input. |
 | `MISSING_ARGUMENT` | `{name}` | Required arg not supplied. |
 | `TOO_MANY_ARGUMENTS` | `{input}` | Extra tokens beyond signature. |
 | `COOLDOWN_ACTIVE` | `{remaining}` | Cooldown still active. |
-| `COMMAND_ERROR` | — | Executor threw unhandled exception. |
+| `COMMAND_ERROR` | - | Executor threw unhandled exception. |
 | `CONFIRM_PROMPT` | `{command}`, `{seconds}` | Confirmation requested. Default is clickable. |
-| `CONFIRM_NOTHING_PENDING` | — | Confirmation command run with nothing pending. |
+| `CONFIRM_NOTHING_PENDING` | - | Confirmation command run with nothing pending. |
 | `HELP_HEADER` | `{command}` | Top of auto help. |
 | `HELP_ENTRY` | `{usage}`, `{description}` | Per-executor line in help. |
 | `UNKNOWN_SUBCOMMAND` | `{typed}`, `{command}`, `{suggestion}` | Did-you-mean. |
@@ -191,8 +191,8 @@ Available in every framework instance:
 - `boolean` / `Boolean` (accepts true/false/yes/no/on/off)
 - `int`, `long`, `double`, `float` (parse + range)
 - `java.util.UUID`
-- Any `Enum<E>` — suggestions include every constant, case-insensitive
-- `java.util.Optional<T>` — wraps any of the above for optional parameters
+- Any `Enum<E>` - suggestions include every constant, case-insensitive
+- `java.util.Optional<T>` - wraps any of the above for optional parameters
 
 Paper adds: `org.bukkit.entity.Player`, `org.bukkit.World`.
 Velocity adds: `com.velocitypowered.api.proxy.Player`.
@@ -249,7 +249,7 @@ public interface CommandActor {
 }
 ```
 
-## Testing — `core-testkit`
+## Testing - `core-testkit`
 
 ```kotlin
 testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.0")
@@ -265,7 +265,7 @@ DispatchAssert.assertThat(result).succeeded();
 
 Assertions available on `DispatchAssert`: `succeeded()`, `handled()`, `failed(MessageKey)`, `invalidArgs(name, input)`, `noPermission(permission)`, `playerOnly()`, `cooldown(remaining)`, `pendingConfirmation(commandName)`, `helpShown()`.
 
-## Common tasks — recipes
+## Common tasks - recipes
 
 ### Subcommands with shared permission
 
@@ -337,21 +337,21 @@ public void home(@Sender CommandActor actor) {
 
 ## Frequent LLM mistakes to avoid
 
-1. **Inventing annotations** — the full list is above. `@Route`, `@Handler`, `@Subcommand`, `@Path` do not exist.
-2. **Inventing sub-packages** — there is no `io.github.hanielcota.commandframework.message`, `.middleware`, `.resolver`, or `.actor`. Everything is flat: `CommandActor`, `CommandContext`, `CommandResult`, `CommandMiddleware`, `ArgumentResolver`, `MessageKey`, `MessageProvider` all live directly at `io.github.hanielcota.commandframework.*`. Only the **annotations** are under `.annotation.*` and the **platform bridges** under `.paper.*` / `.velocity.*` / `.testkit.*`.
-3. **Wrong Maven coordinates** — the published `groupId` is `io.github.hanielcota.commandframework` (NOT `com.github.HanielCota.CommandFramework`, which only matches JitPack's URL path and 404s as a coordinate). Every dependency is `io.github.hanielcota.commandframework:<module>:<version>`.
-4. **`ctx.rawArguments()` as `String[]`** — it is a single `String` (the raw, untokenized argument tail). Use `ctx.arguments()` for the tokenized `List<String>`.
-5. **Multi-token `@Execute(sub = "player ban")`** — a sub name is a single token. Use a single-token form such as `@Execute(sub = "playerban")` / `player_ban`, or split into separate commands.
-6. **`@Async` + `@Sender Player`** — async executors must take `@Sender CommandActor` (not `Player` / `CommandSender` / `CommandSource`). Re-resolve the platform sender inside via `Bukkit.getPlayer(actor.uniqueId())` etc.
-7. **Using Bukkit command classes** — do not extend `Command`, `TabExecutor`, `CommandExecutor`. Do not touch `SimpleCommandMap`.
-8. **Registering in `plugin.yml`** — skip the `commands:` section. Only `name`, `main`, `version`, `api-version` are required. On Paper 1.20.5+ prefer `paper-plugin.yml` (the modern format used by `examples/paper-sample`); legacy `plugin.yml` still works but triggers a deprecation notice.
-9. **Forgetting the annotation processor** — without it, `scanPackage` finds nothing, and `@Arg(greedy = true)` won't be validated until runtime.
-10. **`@Sender` on the wrong parameter** — must be first, must be a platform-known type (`CommandActor`, `Player`, `CommandSender` / `CommandSource`).
-11. **Treating messages as plain strings** — they are MiniMessage. Use `<red>`, `<click:run_command:'/foo'>`, `<hover:show_text:'bar'>`.
-12. **Manual async** — use `@Async` for blocking work, then hop back to the platform main thread yourself before calling thread-confined APIs.
-13. **Cooldown before parsing** — cooldown is post-parse. Don't try to apply it manually in the handler.
-14. **Final/static `@Inject` fields** — must be plain instance fields.
-15. **`ArgumentResolver.type()` returning generic type** — `List<Kit>.class` isn't a thing. Use `Kit.class`.
+1. **Inventing annotations** - the full list is above. `@Route`, `@Handler`, `@Subcommand`, `@Path` do not exist.
+2. **Inventing sub-packages** - there is no `io.github.hanielcota.commandframework.message`, `.middleware`, `.resolver`, or `.actor`. Everything is flat: `CommandActor`, `CommandContext`, `CommandResult`, `CommandMiddleware`, `ArgumentResolver`, `MessageKey`, `MessageProvider` all live directly at `io.github.hanielcota.commandframework.*`. Only the **annotations** are under `.annotation.*` and the **platform bridges** under `.paper.*` / `.velocity.*` / `.testkit.*`.
+3. **Wrong Maven coordinates** - the published `groupId` is `io.github.hanielcota.commandframework` (NOT `com.github.HanielCota.CommandFramework`, which only matches JitPack's URL path and 404s as a coordinate). Every dependency is `io.github.hanielcota.commandframework:<module>:<version>`.
+4. **`ctx.rawArguments()` as `String[]`** - it is a single `String` (the raw, untokenized argument tail). Use `ctx.arguments()` for the tokenized `List<String>`.
+5. **Multi-token `@Execute(sub = "player ban")`** - a sub name is a single token. Use a single-token form such as `@Execute(sub = "playerban")` / `player_ban`, or split into separate commands.
+6. **`@Async` + `@Sender Player`** - async executors must take `@Sender CommandActor` (not `Player` / `CommandSender` / `CommandSource`). Re-resolve the platform sender inside via `Bukkit.getPlayer(actor.uniqueId())` etc.
+7. **Using Bukkit command classes** - do not extend `Command`, `TabExecutor`, `CommandExecutor`. Do not touch `SimpleCommandMap`.
+8. **Registering in `plugin.yml`** - skip the `commands:` section. Only `name`, `main`, `version`, `api-version` are required. On Paper 1.20.5+ prefer `paper-plugin.yml` (the modern format used by `examples/paper-sample`); legacy `plugin.yml` still works but triggers a deprecation notice.
+9. **Forgetting the annotation processor** - without it, `scanPackage` finds nothing, and `@Arg(greedy = true)` won't be validated until runtime.
+10. **`@Sender` on the wrong parameter** - must be first, must be a platform-known type (`CommandActor`, `Player`, `CommandSender` / `CommandSource`).
+11. **Treating messages as plain strings** - they are MiniMessage. Use `<red>`, `<click:run_command:'/foo'>`, `<hover:show_text:'bar'>`.
+12. **Manual async** - use `@Async` for blocking work, then hop back to the platform main thread yourself before calling thread-confined APIs.
+13. **Cooldown before parsing** - cooldown is post-parse. Don't try to apply it manually in the handler.
+14. **Final/static `@Inject` fields** - must be plain instance fields.
+15. **`ArgumentResolver.type()` returning generic type** - `List<Kit>.class` isn't a thing. Use `Kit.class`.
 
 ## Source of truth
 

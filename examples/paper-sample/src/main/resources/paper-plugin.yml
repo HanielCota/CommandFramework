@@ -5,4 +5,4 @@ api-version: '1.21'
 description: CommandFramework paper-sample demonstrating heal/economy-style commands.
 authors:
   - HanielCota
-# No `commands:` section — CommandFramework registers through Paper's Brigadier lifecycle.
+# No `commands:` section - CommandFramework registers through Paper's Brigadier lifecycle.

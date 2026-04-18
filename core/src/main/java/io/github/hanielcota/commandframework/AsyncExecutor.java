@@ -31,7 +31,7 @@ public interface AsyncExecutor {
     /**
      * Virtual-thread factory gated by a {@link Semaphore} of size {@code maxConcurrent}. Once the
      * cap is reached, further submissions fail fast with {@link RejectedExecutionException}
-     * instead of piling up unbounded threads — the caller decides how to recover (retry, degrade,
+     * instead of piling up unbounded threads - the caller decides how to recover (retry, degrade,
      * drop). A bounded variant is strongly recommended for production plugins.
      *
      * @param maxConcurrent maximum number of simultaneously running tasks; must be positive

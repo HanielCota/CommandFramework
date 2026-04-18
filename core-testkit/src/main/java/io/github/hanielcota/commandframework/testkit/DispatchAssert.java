@@ -32,7 +32,7 @@ public final class DispatchAssert {
     }
 
     /**
-     * Returns the sender that produced the result — useful for checking messages.
+     * Returns the sender that produced the result - useful for checking messages.
      *
      * @return the sender
      */

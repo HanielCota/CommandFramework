@@ -6,7 +6,7 @@ plugins {
 
 group = "com.example"
 version = "1.0.0"
-val commandFrameworkVersion = "0.2.0"
+val commandFrameworkVersion = "0.2.1"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(25))

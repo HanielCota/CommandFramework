@@ -488,7 +488,7 @@ class CommandFrameworkCoreTest {
         CommandResult afterConfirm = framework.dispatch(player, "armed", "");
 
         assertInstanceOf(CommandResult.PendingConfirmation.class, first);
-        // Cooldown is not charged while the prompt is pending — a second dispatch just re-queues.
+        // Cooldown is not charged while the prompt is pending - a second dispatch just re-queues.
         assertInstanceOf(CommandResult.PendingConfirmation.class, second);
         assertInstanceOf(CommandResult.Success.class, confirmed);
         // Cooldown starts at the moment of successful confirmation, so the next dispatch is blocked.

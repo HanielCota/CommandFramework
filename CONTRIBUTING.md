@@ -5,7 +5,7 @@ the build locally and how PRs are handled.
 
 ## Prerequisites
 
-- JDK 25 (Temurin recommended) — Gradle toolchain will auto-provision if missing, but
+- JDK 25 (Temurin recommended) - Gradle toolchain will auto-provision if missing, but
   having it installed is faster.
 - Git.
 
@@ -19,12 +19,12 @@ No IDE is required, but IntelliJ IDEA 2025.3+ supports Java 25 previews cleanly.
 
 This runs, in order, for every subproject (`core`, `paper`, `velocity`):
 
-1. `compileJava` — with Error Prone 2.43.0 via `net.ltgt.errorprone` 5.1.0.
-2. `checkstyleMain` — using `config/checkstyle/checkstyle.xml` (Checkstyle 10.20.2).
-3. `pmdMain` — using `config/pmd/ruleset.xml` (PMD 7.8.0).
-4. `test` — JUnit 5 + Mockito 5.22.0 (Paper/Velocity use `-javaagent` for Mockito
+1. `compileJava` - with Error Prone 2.43.0 via `net.ltgt.errorprone` 5.1.0.
+2. `checkstyleMain` - using `config/checkstyle/checkstyle.xml` (Checkstyle 10.20.2).
+3. `pmdMain` - using `config/pmd/ruleset.xml` (PMD 7.8.0).
+4. `test` - JUnit 5 + Mockito 5.22.0 (Paper/Velocity use `-javaagent` for Mockito
    attach on Java 21+).
-5. `shadowJar` — produces relocated fat jars for `paper` and `velocity`.
+5. `shadowJar` - produces relocated fat jars for `paper` and `velocity`.
 
 Target test count as of 0.1.0: **86 tests** (`core` 59, `paper` 13, `velocity` 14).
 
@@ -57,7 +57,7 @@ Artifacts land under `~/.m2/repository/io/github/hanielcota/commandframework/`.
 ### Style checks
 
 Checkstyle and PMD must pass. If a rule genuinely obstructs a valid fix, discuss in the
-PR before suppressing — do not introduce new `@SuppressWarnings` without justification.
+PR before suppressing - do not introduce new `@SuppressWarnings` without justification.
 
 Error Prone runs on every `compileJava`. An Error Prone error fails the build. To
 suppress a specific false positive, use `@SuppressWarnings("BugPatternName")` with a
@@ -68,7 +68,7 @@ one-line comment explaining why.
 - New behavior → new test. New public API → at least one test per public method.
 - Tests live under `{module}/src/test/java/...` mirroring the main package structure.
 - Prefer pure Mockito over MockBukkit for Paper adapter tests unless a real lifecycle
-  is unavoidable; Velocity has no mocking framework — use Mockito.
+  is unavoidable; Velocity has no mocking framework - use Mockito.
 - Avoid `Thread.sleep` in tests. If a timing test is unavoidable, document the margin
   and the tradeoff.
 

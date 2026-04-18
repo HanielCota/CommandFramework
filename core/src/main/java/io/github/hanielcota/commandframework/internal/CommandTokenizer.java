@@ -34,13 +34,10 @@ public final class CommandTokenizer {
         return new TokenizedInput(tokens, trailingWhitespace);
     }
 
-    // Splitting uses \s+, so the trailing-whitespace flag must use the same definition —
+    // Splitting uses \s+, so the trailing-whitespace flag must use the same definition -
     // otherwise a tab-terminated input like "foo\t" would be classified as "still typing foo"
     // instead of "ready for the next token", and tab-completion would suggest the wrong set.
     private boolean endsWithWhitespace(String input) {
-        if (input.isEmpty()) {
-            return false;
-        }
-        return Character.isWhitespace(input.charAt(input.length() - 1));
+        return !input.isEmpty() && Character.isWhitespace(input.charAt(input.length() - 1));
     }
 }

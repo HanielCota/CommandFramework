@@ -21,8 +21,8 @@
 
 CommandFramework é uma **biblioteca** que você adiciona ao seu plugin de Minecraft
 (Paper ou Velocity). Em vez de escrever toda a boilerplate que Paper/Velocity normalmente
-exigem — command maps, declarações no `plugin.yml`, parsing de argumentos, checagens de
-permissão, cooldowns, tab-complete, telas de ajuda — você escreve apenas uma classe Java
+exigem - command maps, declarações no `plugin.yml`, parsing de argumentos, checagens de
+permissão, cooldowns, tab-complete, telas de ajuda - você escreve apenas uma classe Java
 com algumas anotações, e tudo o mais é conectado automaticamente.
 
 **Exemplo do fluxo inteiro:**
@@ -38,7 +38,7 @@ public final class HealCommand {
 }
 ```
 
-Coloque essa classe no pacote `commands` do seu plugin, e `/heal` funciona no jogo —
+Coloque essa classe no pacote `commands` do seu plugin, e `/heal` funciona no jogo -
 com permissão, tab-complete, sugestão "você quis dizer" se alguém digitar errado um
 subcomando, e um botão clicável de confirmação quando você adicionar `@Confirm`. Só isso.
 
@@ -54,7 +54,7 @@ subcomando, e um botão clicável de confirmação quando você adicionar `@Conf
 
 ---
 
-## 📋 Antes de começar — pré-requisitos
+## 📋 Antes de começar - pré-requisitos
 
 | Você precisa | Para quê | Como obter |
 |---|---|---|
@@ -64,14 +64,14 @@ subcomando, e um botão clicável de confirmação quando você adicionar `@Conf
 | **Uma IDE (IntelliJ recomendado)** | Processamento de anotações + autocomplete. | [IntelliJ Community](https://www.jetbrains.com/idea/download/) é gratuito. |
 
 > **Nunca fez plugin?** Comece pelo guia oficial do Paper
-> [*Getting Started*](https://docs.papermc.io/paper/dev/getting-started/project-setup) — construa um hello-world, veja ele carregar num servidor, depois volte aqui.
+> [*Getting Started*](https://docs.papermc.io/paper/dev/getting-started/project-setup) - construa um hello-world, veja ele carregar num servidor, depois volte aqui.
 
 ---
 
 ## 🗂️ Índice
 
 1. [Instalação](#-instalação)
-2. [Seu primeiro comando — tutorial de 10 minutos](#-seu-primeiro-comando--tutorial-de-10-minutos)
+2. [Seu primeiro comando - tutorial de 10 minutos](#-seu-primeiro-comando--tutorial-de-10-minutos)
 3. [Aprenda por exemplo](#-aprenda-por-exemplo)
    - [Subcomandos](#subcomandos)
    - [Argumentos e tipos](#argumentos-e-tipos)
@@ -83,7 +83,7 @@ subcomando, e um botão clicável de confirmação quando você adicionar `@Conf
    - [Tipos de argumento customizados](#tipos-de-argumento-customizados)
    - [Middlewares (auditoria, métricas, tracing)](#middlewares)
    - [Rate limiting](#rate-limiting)
-4. [Mensagens — totalmente configuráveis](#-mensagens--totalmente-configuráveis)
+4. [Mensagens - totalmente configuráveis](#-mensagens--totalmente-configuráveis)
 5. [Testando seus comandos](#-testando-seus-comandos)
 6. [Cola de anotações](#-cola-de-anotações)
 7. [Cola do builder](#-cola-do-builder)
@@ -100,7 +100,7 @@ subcomando, e um botão clicável de confirmação quando você adicionar `@Conf
 
 Você tem **três formas** de adicionar o CommandFramework ao seu plugin. Escolha uma.
 
-### Opção 1 — JitPack (recomendado, sem configuração)
+### Opção 1 - JitPack (recomendado, sem configuração)
 
 Adicione o repositório JitPack e o módulo da sua plataforma.
 
@@ -134,9 +134,9 @@ dependencies {
 > **O que é o `annotationProcessor`?** Ele roda em tempo de compilação, lê suas
 > anotações `@Command` / `@Execute` / `@Arg`, valida elas, e gera um arquivo
 > pequeno que o framework usa para encontrar seus comandos em tempo de execução.
-> Você não interage com ele — só precisa estar no classpath para `scanPackage(...)` funcionar.
+> Você não interage com ele - só precisa estar no classpath para `scanPackage(...)` funcionar.
 
-### Opção 2 — Plugin Gradle (configuração em uma linha)
+### Opção 2 - Plugin Gradle (configuração em uma linha)
 
 Se você usa Gradle, o plugin nativo conecta tudo (dependência da plataforma,
 annotation processor, toolchain Java 25) para você:
@@ -153,7 +153,7 @@ commandframework {
 }
 ```
 
-### Opção 3 — Maven
+### Opção 3 - Maven
 
 ```xml
 <repositories>
@@ -180,9 +180,9 @@ commandframework {
 
 ---
 
-## 📂 Estrutura de pacotes — de onde importar
+## 📂 Estrutura de pacotes - de onde importar
 
-Tudo no framework vive em uma destas três raízes. **Não existem sub-pacotes** tipo `.message`, `.middleware`, `.resolver` ou `.actor` — não deixe uma IA alucinar esses nomes.
+Tudo no framework vive em uma destas três raízes. **Não existem sub-pacotes** tipo `.message`, `.middleware`, `.resolver` ou `.actor` - não deixe uma IA alucinar esses nomes.
 
 | Você quer | Importar de |
 | --- | --- |
@@ -192,20 +192,20 @@ Tudo no framework vive em uma destas três raízes. **Não existem sub-pacotes**
 | Bridge do Velocity (`VelocityCommandFramework`) | `io.github.hanielcota.commandframework.velocity.*` |
 | Testkit (`CommandTestKit`, `TestSender`, `DispatchAssert`) | `io.github.hanielcota.commandframework.testkit.*` |
 
-Se a IDE sugerir um import terminado em `.message.`, `.middleware.`, `.resolver.` ou `.actor.`, está errado — apague e importe da raiz plana acima.
+Se a IDE sugerir um import terminado em `.message.`, `.middleware.`, `.resolver.` ou `.actor.`, está errado - apague e importe da raiz plana acima.
 
 ---
 
-## 🚀 Seu primeiro comando — tutorial de 10 minutos
+## 🚀 Seu primeiro comando - tutorial de 10 minutos
 
 Assumindo que você já tem um projeto de plugin Paper funcionando (um `onEnable` vazio,
-`paper-plugin.yml` — ou `plugin.yml` legado — declarado). Vamos adicionar um comando `/heal`.
+`paper-plugin.yml` - ou `plugin.yml` legado - declarado). Vamos adicionar um comando `/heal`.
 
-### Passo 1 — Adicione a dependência
+### Passo 1 - Adicione a dependência
 
 Veja a seção [Instalação](#-instalação) acima.
 
-### Passo 2 — Inicialize o framework no `onEnable`
+### Passo 2 - Inicialize o framework no `onEnable`
 
 ```java
 package com.example.myplugin;
@@ -229,7 +229,7 @@ public final class MyPlugin extends JavaPlugin {
 - `build()` valida tudo e conecta no registrar moderno de comandos do Paper
   (Brigadier). Nenhuma alteração em `plugin.yml` necessária.
 
-### Passo 3 — Escreva o comando
+### Passo 3 - Escreva o comando
 
 Crie `src/main/java/com/example/myplugin/commands/HealCommand.java`:
 
@@ -257,7 +257,7 @@ public final class HealCommand {
 }
 ```
 
-### Passo 4 — Compile e rode
+### Passo 4 - Compile e rode
 
 ```bash
 ./gradlew build
@@ -266,7 +266,7 @@ public final class HealCommand {
 Coloque o jar gerado em `plugins/` no servidor e reinicie. No jogo:
 
 - `/heal` funciona para qualquer jogador com a permissão `myplugin.heal`.
-- Sem a permissão: o framework envia a mensagem `NO_PERMISSION` automaticamente (configurável — veja [Mensagens](#-mensagens--totalmente-configuráveis)).
+- Sem a permissão: o framework envia a mensagem `NO_PERMISSION` automaticamente (configurável - veja [Mensagens](#-mensagens--totalmente-configuráveis)).
 - Tab-complete, sugestões para subcomandos desconhecidos e ajuda para `/heal ?` já estão conectados.
 
 **🎉 Você escreveu um comando.** Agora vamos ver tudo o mais que dá para fazer.
@@ -323,7 +323,7 @@ public void give(@Sender Player sender, Player target, int amount) {
 }
 ```
 
-**Argumentos opcionais** — use um padrão quando estiver faltando:
+**Argumentos opcionais** - use um padrão quando estiver faltando:
 
 ```java
 @Execute(sub = "give")
@@ -333,7 +333,7 @@ public void give(@Sender Player player, Player target, double amount,
 }
 ```
 
-**Greedy (guloso)** — captura a linha inteira como uma `String`:
+**Greedy (guloso)** - captura a linha inteira como uma `String`:
 
 ```java
 @Execute(sub = "say")
@@ -402,7 +402,7 @@ public void wipe(@Sender Player player) {
 public final class HomeCommand {
 
     @Execute
-    @Async                        // roda em virtual thread — seguro para DB/HTTP
+    @Async                        // roda em virtual thread - seguro para DB/HTTP
     public void home(@Sender CommandActor actor) {
         UUID playerId = actor.uniqueId();
         Location h = database.loadHome(playerId);
@@ -447,7 +447,7 @@ public final class BalanceCommand {
 }
 ```
 
-`JavaPlugin` (Paper) e `ProxyServer` (Velocity) já ficam registrados automaticamente —
+`JavaPlugin` (Paper) e `ProxyServer` (Velocity) já ficam registrados automaticamente -
 você não precisa chamar `.bind(...)` neles.
 
 ### Tipos de argumento customizados
@@ -495,7 +495,7 @@ public void give(@Sender Player player, Kit kit) { /* ... */ }
 
 ### Middlewares
 
-Um middleware roda **em volta** de todo comando — útil para auditoria, métricas, tracing.
+Um middleware roda **em volta** de todo comando - útil para auditoria, métricas, tracing.
 
 ```java
 public final class AuditMiddleware implements CommandMiddleware {
@@ -531,7 +531,7 @@ builder.rateLimit(50, Duration.ofMinutes(1));
 
 ---
 
-## 💬 Mensagens — totalmente configuráveis
+## 💬 Mensagens - totalmente configuráveis
 
 Todo erro, prompt e linha de ajuda é um template **MiniMessage** que você customiza.
 
@@ -569,19 +569,19 @@ PaperCommandFramework.paper(this)
 `fromStringMap` tolera `no-permission`, `no_permission` e `NO_PERMISSION`
 indiferentemente, e qualquer chave omitida cai no template padrão.
 
-**Referência completa** — todas as chaves e seus placeholders:
+**Referência completa** - todas as chaves e seus placeholders:
 
 | Chave | Placeholders | Quando dispara |
 |---|---|---|
-| `PLAYER_ONLY` | — | Não-jogador tentou um comando `@RequirePlayer`. |
-| `NO_PERMISSION` | — | Remetente sem `@Permission`. |
+| `PLAYER_ONLY` | - | Não-jogador tentou um comando `@RequirePlayer`. |
+| `NO_PERMISSION` | - | Remetente sem `@Permission`. |
 | `INVALID_ARGUMENT` | `{name}`, `{input}` | Resolver rejeitou o input. |
 | `MISSING_ARGUMENT` | `{name}` | Argumento obrigatório não foi fornecido. |
 | `TOO_MANY_ARGUMENTS` | `{input}` | Tokens a mais que a assinatura. |
 | `COOLDOWN_ACTIVE` | `{remaining}` | Janela do `@Cooldown` ainda aberta. |
-| `COMMAND_ERROR` | — | Handler lançou exceção não tratada. |
+| `COMMAND_ERROR` | - | Handler lançou exceção não tratada. |
 | `CONFIRM_PROMPT` | `{command}`, `{seconds}` | Prompt clicável de confirmação. |
-| `CONFIRM_NOTHING_PENDING` | — | Usuário rodou o comando de confirmação sem nada pendente. |
+| `CONFIRM_NOTHING_PENDING` | - | Usuário rodou o comando de confirmação sem nada pendente. |
 | `HELP_HEADER` | `{command}` | Linha de topo da ajuda gerada. |
 | `HELP_ENTRY` | `{usage}`, `{description}` | Uma linha por executor na ajuda. |
 | `UNKNOWN_SUBCOMMAND` | `{typed}`, `{command}`, `{suggestion}` | Sugestão "você quis dizer" para typos. |
@@ -674,9 +674,9 @@ para o fim da assinatura do método, ou use não-greedy (string) caso contrário
 ### "Unknown command" no jogo
 
 - Verifique que o plugin foi registrado corretamente (o framework usa o ciclo
-  Brigadier do Paper — declarações legadas no `plugin.yml` **não** são necessárias,
+  Brigadier do Paper - declarações legadas no `plugin.yml` **não** são necessárias,
   mas o plugin em si precisa carregar).
-- Tente `.debug(true)` — se o dispatcher nunca loga seu comando, o literal
+- Tente `.debug(true)` - se o dispatcher nunca loga seu comando, o literal
   nunca foi registrado.
 
 ### "Meu campo `@Inject` está null"
@@ -687,7 +687,7 @@ para o fim da assinatura do método, ou use não-greedy (string) caso contrário
 
 ### "Resolver de jogador diz 'Player not found' pra um nome válido"
 
-O resolver nativo chama `server.getPlayerExact(name)` — o jogador precisa estar
+O resolver nativo chama `server.getPlayerExact(name)` - o jogador precisa estar
 **online** e o nome precisa bater exatamente. Sensibilidade a maiúsculas segue a configuração do servidor.
 
 ### `NoClassDefFoundError: net/kyori/adventure/text/minimessage/MiniMessage`
@@ -706,11 +706,11 @@ Gradle Shadow ou declare o MiniMessage no seu POM.
 ## ❓ FAQ
 
 **Ainda preciso de um `plugin.yml` (ou `paper-plugin.yml`)?**
-Sim — o Paper precisa de *algum* descritor de plugin pra achar sua classe
+Sim - o Paper precisa de *algum* descritor de plugin pra achar sua classe
 `main`. O que você não precisa é da seção `commands:`.
 
 No **Paper 1.20.5+** o sample oficial (`examples/paper-sample`) usa o formato
-moderno `paper-plugin.yml` — essa é a escolha recomendada. O `plugin.yml`
+moderno `paper-plugin.yml` - essa é a escolha recomendada. O `plugin.yml`
 legado ainda funciona, mas o Paper imprime um aviso de deprecation no load.
 
 `src/main/resources/paper-plugin.yml` mínimo:
@@ -734,7 +734,7 @@ tasks.processResources {
 Pode. `scanPackage("...")` varre toda classe `@Command`. Não há limite rígido.
 
 **Funciona no Spigot?**
-Não — a API de ciclo de vida do Brigadier do Paper é obrigatória. Use Paper 1.20.6+.
+Não - a API de ciclo de vida do Brigadier do Paper é obrigatória. Use Paper 1.20.6+.
 
 **Funciona com Kotlin?**
 Funciona, desde que você mantenha `@Command`/`@Execute` em métodos comuns
@@ -759,13 +759,13 @@ Não são. O framework registra direto no registrar Brigadier do Paper via
 | Termo | Significado |
 |---|---|
 | **Adapter / Bridge** | O módulo fino (`paper`, `velocity`) que traduz entre a API do servidor e o dispatcher do framework. |
-| **Actor** | Remetente neutro de plataforma — jogador ou console. Use `CommandActor` para escrever comandos agnósticos de plataforma. |
+| **Actor** | Remetente neutro de plataforma - jogador ou console. Use `CommandActor` para escrever comandos agnósticos de plataforma. |
 | **Brigadier** | A biblioteca de comandos da Mojang que vem com o Minecraft. Dá tab-complete no cliente. |
 | **Dispatcher** | O componente central que pega um comando digitado e decide que método chamar. |
 | **Executor** | Um método anotado com `@Execute`. A coisa que de fato roda. |
 | **MiniMessage** | Formato de texto do Adventure (`<red>`, `<hover>`, `<click>`). Usado em templates de mensagem. |
 | **Resolver** | Conversor de string crua (o que o jogador digitou) para objeto tipado (`Player`, `Kit`, etc.). |
-| **Middleware** | Código que envolve todo dispatch — roda antes e depois do executor. |
+| **Middleware** | Código que envolve todo dispatch - roda antes e depois do executor. |
 | **Annotation processor** | Ferramenta de tempo de compilação que lê anotações e gera um pequeno arquivo de metadata que o framework usa para achar comandos em runtime. Não é dependência de runtime. |
 
 ---
@@ -816,7 +816,7 @@ Não são. O framework registra direto no registrar Brigadier do Paper via
 
 | Módulo | Para que serve |
 |---|---|
-| `annotations/` | Classes de anotação (`@Command`, `@Execute`, …). Leve — sem dependências de runtime. |
+| `annotations/` | Classes de anotação (`@Command`, `@Execute`, …). Leve - sem dependências de runtime. |
 | `core/` | Dispatcher, resolvers, managers, serviço de mensagem. Agnóstico de plataforma. |
 | `paper/` | Adapter do Paper usando `LifecycleEvents.COMMANDS` Brigadier. |
 | `velocity/` | Adapter do Velocity usando `BrigadierCommand`. |
@@ -848,7 +848,7 @@ Brigadier). `JavaPlugin.getCommand(...)` legado não é usado.
 
 ## 🤖 Usando com LLMs (Cursor, Copilot, Claude Code, ChatGPT)
 
-Este repo inclui um [`llms.txt`](./llms.txt) na raiz — um resumo denso, legível
+Este repo inclui um [`llms.txt`](./llms.txt) na raiz - um resumo denso, legível
 por máquina, de toda anotação pública, método do builder, message key e receita
 comum, seguindo a [convenção llms.txt](https://llmstxt.org). LLMs que indexam o
 repo pegam automaticamente; você também pode colar no contexto do chat quando

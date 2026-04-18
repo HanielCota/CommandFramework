@@ -248,7 +248,7 @@ public final class CommandTestKit {
     }
 
     /**
-     * Minimal {@link PlatformBridge} used by the kit. Registration is a no-op — callers
+     * Minimal {@link PlatformBridge} used by the kit. Registration is a no-op - callers
      * invoke {@link CommandFramework#dispatch} directly.
      */
     static final class TestBridge implements PlatformBridge<TestSender> {
@@ -271,7 +271,7 @@ public final class CommandTestKit {
 
         @Override
         public void register(CommandFramework<TestSender> framework) {
-            // intentionally empty — tests dispatch directly
+            // intentionally empty - tests dispatch directly
         }
     }
 

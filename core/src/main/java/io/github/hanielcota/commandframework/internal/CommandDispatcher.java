@@ -28,7 +28,7 @@ import java.util.Set;
  * permission check, player-only check, cooldown, argument parsing, confirmation and execution.
  *
  * <p>A single instance is shared by all commands registered in a framework. It holds no per-call
- * state — all request-scoped state lives in {@link CommandContext} arguments passed through the
+ * state - all request-scoped state lives in {@link CommandContext} arguments passed through the
  * pipeline.
  *
  * <p><b>Thread-safety:</b> safe for concurrent use. Mutable collaborator state lives inside the
@@ -200,7 +200,7 @@ public final class CommandDispatcher {
         List<String> rootArgs = this.argumentSuggestions(actor, rootExecutor, List.of(), true, 0);
         // Avoid the LinkedHashSet/List.copyOf allocation on the per-keystroke tab-completion path
         // when only one side has suggestions. The merge set is only needed to dedupe subcommand
-        // names against first-argument suggestions — pointless when either list is empty.
+        // names against first-argument suggestions - pointless when either list is empty.
         if (rootArgs.isEmpty()) {
             return subcommand;
         }
@@ -269,7 +269,7 @@ public final class CommandDispatcher {
         PreparedInvocation invocation = this.prepareInvocation(actor, command, label, selection);
 
         if (executor.confirm() != null) {
-            // Peek cooldown without consuming — if the sender is already on cooldown from a prior
+            // Peek cooldown without consuming - if the sender is already on cooldown from a prior
             // successful confirmation, reject now instead of queueing another prompt that would
             // only hit the same cooldown at consume time. Cooldown is actually consumed in
             // dispatchConfirmation, so abandoned or expired prompts never eat the window.
@@ -373,7 +373,7 @@ public final class CommandDispatcher {
         }
 
         // resolveArgument already wraps in Optional.of(...) when parameter.javaOptional() is true.
-        // Do NOT re-wrap here — doing so yields Optional<Optional<X>> and breaks reflective invoke.
+        // Do NOT re-wrap here - doing so yields Optional<Optional<X>> and breaks reflective invoke.
         return this.resolveArgument(actor, label, commandPath, parameter, parameter.optionalValue(), previousArguments);
     }
 
@@ -389,7 +389,7 @@ public final class CommandDispatcher {
             ArgumentResolutionContext context = new ArgumentResolutionContext(actor, label, commandPath, previousArguments);
             Object value = this.resolver(parameter.resolvedType()).resolve(context, input);
             if (value == null) {
-                // Use getSimpleName() — keeps the diagnostic human-readable without leaking the
+                // Use getSimpleName() - keeps the diagnostic human-readable without leaking the
                 // consumer's package layout if this message ever ends up in a user-facing surface.
                 throw new ArgumentResolveException(
                         parameter.name(), input, "Resolver returned null for " + parameter.resolvedType().getSimpleName());
@@ -405,7 +405,7 @@ public final class CommandDispatcher {
      *
      * <p><b>Async caveat:</b> for {@code @Async} executors this method returns
      * {@link CommandResult#success()} immediately and dispatches emission from the async callback.
-     * The middleware chain therefore sees {@code Success}, not the executor's real result — any
+     * The middleware chain therefore sees {@code Success}, not the executor's real result - any
      * post-processing middleware (metrics, audit, cooldown rollback) cannot observe failures
      * produced inside an async body. Middlewares that need the real outcome must run on the
      * async thread themselves or the executor must be synchronous.
@@ -417,7 +417,7 @@ public final class CommandDispatcher {
                 try {
                     result = this.invokeMethod(actor, invocation);
                 } catch (Exception exception) {
-                    // Narrowed from Throwable — let Error (OOM, StackOverflow) reach the
+                    // Narrowed from Throwable - let Error (OOM, StackOverflow) reach the
                     // virtual-thread uncaught handler so the operator sees a real signal.
                     this.logger.error("Unhandled exception in async command " + invocation.commandPath(), exception);
                     return;
@@ -447,7 +447,7 @@ public final class CommandDispatcher {
         } catch (PlayerOnlySignal ignored) {
             return new CommandResult.PlayerOnly();
         } catch (Error error) {
-            // Let Error (OOM, StackOverflow, LinkageError) propagate to the JVM — swallowing
+            // Let Error (OOM, StackOverflow, LinkageError) propagate to the JVM - swallowing
             // them hides irrecoverable JVM state from the operator and keeps a degraded process
             // running with inconsistent guarantees.
             throw error;
@@ -529,7 +529,7 @@ public final class CommandDispatcher {
             return;
         }
         String typed = tokenizedInput.tokens().getFirst().toLowerCase(Locale.ROOT);
-        // Skip did-you-mean for very short tokens — any 2-char typo is within edit distance 2 of
+        // Skip did-you-mean for very short tokens - any 2-char typo is within edit distance 2 of
         // most short subcommand names, which produces irrelevant suggestions.
         if (typed.length() < 3) {
             return;
@@ -623,7 +623,7 @@ public final class CommandDispatcher {
         return suggestions != null ? suggestions : List.of();
     }
 
-    // Derived from preflight() so both paths cannot drift — any new gate added to preflight
+    // Derived from preflight() so both paths cannot drift - any new gate added to preflight
     // (world restriction, feature flag, etc.) is automatically reflected in tab completion,
     // help rendering, and did-you-mean filtering without a second edit.
     private boolean allowed(CommandActor actor, ExecutorDefinition executor) {
@@ -672,7 +672,7 @@ public final class CommandDispatcher {
                         "command", commandName,
                         "seconds", String.valueOf(Math.max(1L, expiresIn.toSeconds()))
                 ));
-            default -> { /* Success / Handled / HelpShown / RateLimited — nothing to emit */ }
+            default -> { /* Success / Handled / HelpShown / RateLimited - nothing to emit */ }
         }
         return result;
     }

@@ -10,10 +10,10 @@ import java.util.Objects;
 /**
  * Provides framework message templates.
  *
- * <p><b>Trust boundary — IMPORTANT:</b> templates returned by this provider are fed directly to
+ * <p><b>Trust boundary - IMPORTANT:</b> templates returned by this provider are fed directly to
  * the MiniMessage deserializer. MiniMessage tags such as {@code <click:run_command:…>},
  * {@code <hover:…>} and {@code <insert:…>} are interpreted as interactive components. Only
- * placeholder <i>values</i> injected by the framework are escaped at render time — templates
+ * placeholder <i>values</i> injected by the framework are escaped at render time - templates
  * themselves are NOT. Load templates only from sources you trust (code, plugin-bundled
  * resources, admin-reviewed config). Never source them from untrusted input (user chat, web
  * forms, databases with user-writable rows) without sanitising the strings first via
@@ -31,7 +31,7 @@ public interface MessageProvider {
     String message(MessageKey key);
 
     /**
-     * Returns the built-in MiniMessage templates. Safe to call at any time — stateless.
+     * Returns the built-in MiniMessage templates. Safe to call at any time - stateless.
      */
     static MessageProvider defaults() {
         return DefaultMessageProvider.INSTANCE;
@@ -70,7 +70,7 @@ public interface MessageProvider {
             try {
                 resolved.put(MessageKey.valueOf(normalized), entry.getValue());
             } catch (IllegalArgumentException ignored) {
-                // Skip unknown keys — configs often carry comments or forward-compatible entries.
+                // Skip unknown keys - configs often carry comments or forward-compatible entries.
             }
         }
         return fromMap(resolved);

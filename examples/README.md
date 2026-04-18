@@ -21,6 +21,6 @@ The resulting `build/libs/paper-sample-1.0.0.jar` can be dropped into a Paper se
 
 ## Dependency source
 
-These examples pull CommandFramework from **JitPack** using the `0.1.0` tag — no local
+These examples pull CommandFramework from **JitPack** using the `0.1.0` tag - no local
 installation required. To point at a newer release, edit the `commandframework` version
 in each `build.gradle.kts`.

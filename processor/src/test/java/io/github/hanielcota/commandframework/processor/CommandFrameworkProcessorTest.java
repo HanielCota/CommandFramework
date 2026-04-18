@@ -111,7 +111,7 @@ class CommandFrameworkProcessorTest {
                 """);
 
         assertFalse(result.success(),
-                "tab inside sub name should be rejected — the tokenizer splits on \\s+, so it would break routing at runtime");
+                "tab inside sub name should be rejected - the tokenizer splits on \\s+, so it would break routing at runtime");
         assertTrue(result.messages().stream().anyMatch(message ->
                 message.contains("single token") || message.contains("letters, numbers")),
                 () -> "expected a whitespace/label diagnostic, got: " + result.messages());
@@ -134,7 +134,7 @@ class CommandFrameworkProcessorTest {
                 """);
 
         assertFalse(result.success(),
-                "characters outside [a-zA-Z0-9_-] in sub should be rejected — @Command(name) and @Confirm(commandName) already enforce the same rule");
+                "characters outside [a-zA-Z0-9_-] in sub should be rejected - @Command(name) and @Confirm(commandName) already enforce the same rule");
         assertTrue(result.messages().stream().anyMatch(message ->
                 message.contains("letters, numbers")),
                 () -> "expected a label-character diagnostic, got: " + result.messages());
@@ -208,7 +208,7 @@ class CommandFrameworkProcessorTest {
                 """);
 
         assertFalse(result.success(),
-                "greedy + @Optional should be rejected — the combination is ambiguous");
+                "greedy + @Optional should be rejected - the combination is ambiguous");
         assertTrue(result.messages().stream().anyMatch(message ->
                         message.contains("greedy") && message.contains("@Optional")),
                 () -> "expected greedy+@Optional diagnostic, got: " + result.messages());
@@ -233,7 +233,7 @@ class CommandFrameworkProcessorTest {
                 """);
 
         assertFalse(result.success(),
-                "greedy + Optional<String> should be rejected — the combination is ambiguous");
+                "greedy + Optional<String> should be rejected - the combination is ambiguous");
         assertTrue(result.messages().stream().anyMatch(message ->
                         message.contains("greedy") && message.contains("java.util.Optional")),
                 () -> "expected greedy+Optional diagnostic, got: " + result.messages());

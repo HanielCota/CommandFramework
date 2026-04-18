@@ -24,7 +24,7 @@ public final class MessageService {
     private static final long SECONDS_PER_MINUTE = 60L;
     // Restricted to identifier-like keys to limit the blast radius of future extensions.
     // A permissive match (e.g. any non-whitespace) would pre-qualify path-like or expression-like
-    // tokens such as "{../etc/passwd}" or "{$env.SECRET}" as placeholders — fine today because
+    // tokens such as "{../etc/passwd}" or "{$env.SECRET}" as placeholders - fine today because
     // unknown keys pass through verbatim, but risky if dynamic lookup is ever layered on top.
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-zA-Z0-9_.-]{1,32})}");
 
@@ -90,7 +90,7 @@ public final class MessageService {
     private String applyPlaceholders(String template, Map<String, String> placeholders) {
         Objects.requireNonNull(template, "template");
         // With no placeholders supplied every {key} match would fall through to the "raw == null"
-        // branch below and be kept verbatim — producing an output identical to the input. Skip the
+        // branch below and be kept verbatim - producing an output identical to the input. Skip the
         // regex scan entirely in that case; this is the hot path for parameterless system messages.
         if (placeholders.isEmpty()) {
             return template;

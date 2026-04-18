@@ -155,7 +155,7 @@ public final class InternalCommandBuilder<S> {
                 String normalized = label.toLowerCase(Locale.ROOT);
                 CommandDefinition previous = labels.putIfAbsent(normalized, definition);
                 if (previous != null) {
-                    throw new IllegalStateException("Duplicate command label '" + normalized + "' — "
+                    throw new IllegalStateException("Duplicate command label '" + normalized + "' - "
                             + "declared by " + previous.instance().getClass().getName()
                             + " and " + definition.instance().getClass().getName()
                             + ". Rename one of them or drop the duplicate alias.");

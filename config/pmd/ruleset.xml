@@ -15,7 +15,7 @@
           Flags Map<K,V> fields that already use the interface type and only fires because an
           initializer such as new LinkedHashMap<>() or new EnumMap<>(...) is used for insertion
           ordering or enum keying. The declared type is already the abstract interface, so every
-          external consumer sees Map — the rule produces false positives here.
+          external consumer sees Map - the rule produces false positives here.
         -->
         <exclude name="LooseCoupling"/>
     </rule>
@@ -35,7 +35,7 @@
           failures from user-supplied command handlers (including Errors thrown by misbehaving
           reflection/bytecode-generated code) so the platform scheduler thread is never killed.
           RuntimeAccessFactory catches Throwable because MethodHandle.invoke declares `throws Throwable`
-          — narrowing is impossible without re-wrapping. All catches log and translate into a
+          - narrowing is impossible without re-wrapping. All catches log and translate into a
           typed CommandResult or IllegalStateException.
         -->
         <exclude name="AvoidCatchingThrowable"/>
@@ -66,7 +66,7 @@
         -->
         <exclude name="AvoidUsingVolatile"/>
         <!--
-          TestSender iterates messages via `synchronized(this.messages)` — the documented pattern
+          TestSender iterates messages via `synchronized(this.messages)` - the documented pattern
           for safely iterating a Collections.synchronizedList. Refusing synchronized statements
           would force adopting a heavier concurrent collection with no visible gain.
         -->
@@ -98,7 +98,7 @@
         <exclude name="ExcessiveParameterList"/>
         <!--
           Top-level dispatch/suggest/executePrepared paths must not let runtime exceptions escape
-          into the platform (Paper/Velocity) — the generic catch blocks log and return a safe
+          into the platform (Paper/Velocity) - the generic catch blocks log and return a safe
           CommandResult. DefaultArgumentResolvers.simple() must funnel any ThrowingFunction failure
           into ArgumentResolveException. VelocityActor.sendMessage guards against player-disconnect
           races. Narrow catches would defeat the intent.
@@ -106,7 +106,7 @@
         <exclude name="AvoidCatchingGenericException"/>
         <!--
           Number parsers (parseDouble/parseFloat) catch NumberFormatException to translate it into a
-          typed ArgumentResolveException — idiomatic Java, not flow control abuse.
+          typed ArgumentResolveException - idiomatic Java, not flow control abuse.
         -->
         <exclude name="ExceptionAsFlowControl"/>
         <!--
@@ -125,7 +125,7 @@
         <!--
           CommandFrameworkProcessor validation walks parameters and checks several annotation
           combinations in nested ifs. Flattening with guard clauses makes the diagnostics harder
-          to read and duplicates iteration — not worth the churn.
+          to read and duplicates iteration - not worth the churn.
         -->
         <exclude name="AvoidDeeplyNestedIfStmts"/>
     </rule>

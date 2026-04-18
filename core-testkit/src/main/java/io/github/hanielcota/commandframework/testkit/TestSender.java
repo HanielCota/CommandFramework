@@ -65,7 +65,7 @@ public final class TestSender implements CommandActor {
     /**
      * Returns every {@link Component} this sender has received during the test.
      *
-     * @return received messages (live list — copy if mutating)
+     * @return received messages (live list - copy if mutating)
      */
     public List<Component> receivedMessages() {
         synchronized (this.messages) {
@@ -76,7 +76,7 @@ public final class TestSender implements CommandActor {
     /**
      * Returns received messages rendered as plain text. Simple best-effort render that
      * extracts the top-level content of {@link TextComponent}s and recursively appends
-     * children. Does not resolve translations or styling — use
+     * children. Does not resolve translations or styling - use
      * {@code adventure-text-serializer-plain} in your own tests if you need richer output.
      *
      * @return plain-text rendered messages

@@ -43,7 +43,7 @@ jobs:
           <html lang="en">
           <head>
             <meta charset="utf-8">
-            <title>CommandFramework — Javadoc</title>
+            <title>CommandFramework - Javadoc</title>
             <style>
               body { font-family: system-ui, sans-serif; max-width: 720px; margin: 4rem auto; padding: 0 1rem; color: #24292f; }
               h1 { border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
@@ -55,11 +55,11 @@ jobs:
           <body>
             <h1>CommandFramework Javadoc</h1>
             <p>Pick a module. The full source lives at <a href="https://github.com/HanielCota/CommandFramework">github.com/HanielCota/CommandFramework</a>.</p>
-            <div class="module"><a href="./annotations/"><strong>annotations</strong></a> — <code>@Command</code>, <code>@Execute</code>, <code>@Arg</code>, <code>@Cooldown</code>, etc.</div>
-            <div class="module"><a href="./core/"><strong>core</strong></a> — dispatcher, resolvers, managers, SPIs.</div>
-            <div class="module"><a href="./paper/"><strong>paper</strong></a> — Paper adapter (<code>PaperCommandFramework</code>).</div>
-            <div class="module"><a href="./velocity/"><strong>velocity</strong></a> — Velocity adapter (<code>VelocityCommandFramework</code>).</div>
-            <div class="module"><a href="./core-testkit/"><strong>core-testkit</strong></a> — <code>CommandTestKit</code> for unit-testing commands.</div>
+            <div class="module"><a href="./annotations/"><strong>annotations</strong></a> - <code>@Command</code>, <code>@Execute</code>, <code>@Arg</code>, <code>@Cooldown</code>, etc.</div>
+            <div class="module"><a href="./core/"><strong>core</strong></a> - dispatcher, resolvers, managers, SPIs.</div>
+            <div class="module"><a href="./paper/"><strong>paper</strong></a> - Paper adapter (<code>PaperCommandFramework</code>).</div>
+            <div class="module"><a href="./velocity/"><strong>velocity</strong></a> - Velocity adapter (<code>VelocityCommandFramework</code>).</div>
+            <div class="module"><a href="./core-testkit/"><strong>core-testkit</strong></a> - <code>CommandTestKit</code> for unit-testing commands.</div>
           </body>
           </html>
           HTML

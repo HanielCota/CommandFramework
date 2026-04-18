@@ -25,7 +25,6 @@ public final class RateLimiter {
 
 
     private final int limit;
-    private final Duration window;
     private final long windowNanos;
     private final FrameworkLogger logger;
     private final Cache<UUID, State> states = Caffeine.newBuilder()
@@ -49,8 +48,7 @@ public final class RateLimiter {
 
     public RateLimiter(int limit, Duration window, FrameworkLogger logger) {
         this.limit = limit;
-        this.window = Objects.requireNonNull(window, "window");
-        this.windowNanos = window.toNanos();
+        this.windowNanos = Objects.requireNonNull(window, "window").toNanos();
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 

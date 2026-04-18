@@ -21,8 +21,10 @@ import net.kyori.adventure.text.Component;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiPredicate;
 import java.util.logging.Logger;
 
 final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
@@ -32,17 +34,27 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
     private static final int MAX_PLAYER_NAME_LENGTH = 32;
     // Name of the single greedy-string Brigadier argument used to forward the raw tail of
     // every framework-registered command. Referenced both where the argument is declared and
-    // where it is retrieved from the parsed context — keep both sides in sync.
+    // where it is retrieved from the parsed context - keep both sides in sync.
     private static final String GREEDY_ARG_NAME = "args";
 
     private final ProxyServer server;
     private final Object plugin;
     private final FrameworkLogger logger;
+    private final BiPredicate<CommandActor, Player> playerSuggestFilter;
 
     VelocityPlatformBridge(ProxyServer server, Object plugin) {
+        this(server, plugin, (actor, target) -> true);
+    }
+
+    VelocityPlatformBridge(
+            ProxyServer server,
+            Object plugin,
+            BiPredicate<CommandActor, Player> playerSuggestFilter
+    ) {
         this.server = server;
         this.plugin = plugin;
         this.logger = FrameworkLogger.jul(Logger.getLogger(plugin.getClass().getName()));
+        this.playerSuggestFilter = Objects.requireNonNull(playerSuggestFilter, "playerSuggestFilter");
     }
 
     @Override
@@ -79,7 +91,7 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
 
     @Override
     public List<ArgumentResolver<?>> platformResolvers() {
-        return List.of(new VelocityPlayerResolver(this.server));
+        return List.of(new VelocityPlayerResolver(this.server, this.playerSuggestFilter));
     }
 
     @Override
@@ -222,7 +234,10 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
         }
     }
 
-    private record VelocityPlayerResolver(ProxyServer server) implements ArgumentResolver<Player> {
+    private record VelocityPlayerResolver(
+            ProxyServer server,
+            BiPredicate<CommandActor, Player> visibilityFilter
+    ) implements ArgumentResolver<Player> {
         @Override
         public Class<Player> type() {
             return Player.class;
@@ -243,9 +258,13 @@ final class VelocityPlatformBridge implements PlatformBridge<CommandSource> {
 
         @Override
         public List<String> suggest(CommandActor actor, String currentInput) {
+            // Velocity has no native canSee/vanish concept, so the default filter accepts every
+            // player. Consumers that care about proxy-level visibility (vanish plugins, network
+            // permission gates) can inject a predicate via VelocityCommandFramework.velocity(..).
             String lowered = currentInput.toLowerCase(Locale.ROOT);
             return this.server.getAllPlayers().stream()
                     .filter(Player::isActive)
+                    .filter(target -> this.visibilityFilter.test(actor, target))
                     .map(Player::getUsername)
                     .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(lowered))
                     .sorted()

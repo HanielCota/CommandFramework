@@ -210,7 +210,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
         if (javaOptional || hasOptionalAnnotation) {
             this.error(parameter, "@Arg(greedy = true) is not compatible with @Optional or "
                     + "java.util.Optional<String> parameters. A greedy argument already captures zero-or-more "
-                    + "tokens and is empty when no tokens remain — layering optionality on top is ambiguous. "
+                    + "tokens and is empty when no tokens remain - layering optionality on top is ambiguous. "
                     + "Fix: declare the parameter as a plain String and treat the empty string as 'no input' "
                     + "inside the method body.");
         }
@@ -234,7 +234,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                     + "Platform sender types (Player, CommandSender, CommandSource, ProxiedPlayer) "
                     + "are not thread-safe off the main thread. "
                     + "Fix: change the parameter to @Sender CommandActor and, inside the method, "
-                    + "re-resolve the platform sender on-demand from actor.uniqueId() — e.g. "
+                    + "re-resolve the platform sender on-demand from actor.uniqueId() - e.g. "
                     + "Bukkit.getPlayer(actor.uniqueId()) on Paper, or "
                     + "proxyServer.getPlayer(actor.uniqueId()) on Velocity. "
                     + "Remember the lookup may return null if the player disconnected.");
@@ -449,7 +449,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 .collect(Collectors.joining(", ")) + ")";
     }
 
-    // SECURITY: see note on executorLiteral — stringLiteral() required for every String field.
+    // SECURITY: see note on executorLiteral - stringLiteral() required for every String field.
     private String parameterLiteral(VariableElement parameter) {
         Arg arg = parameter.getAnnotation(Arg.class);
         io.github.hanielcota.commandframework.annotation.Optional optional =
@@ -478,7 +478,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 + ")";
     }
 
-    // SECURITY: see note on executorLiteral — stringLiteral() required for every String field.
+    // SECURITY: see note on executorLiteral - stringLiteral() required for every String field.
     private String cooldownLiteral(Cooldown cooldown) {
         if (cooldown == null) {
             return "null";
@@ -490,7 +490,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 + ")";
     }
 
-    // SECURITY: see note on executorLiteral — stringLiteral() required for every String field.
+    // SECURITY: see note on executorLiteral - stringLiteral() required for every String field.
     private String confirmLiteral(Confirm confirm) {
         if (confirm == null) {
             return "null";
@@ -584,12 +584,12 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
             String collapsed = sub.replaceAll("\\s+", "");
             String underscored = sub.replaceAll("\\s+", "_");
             return "@Execute(sub = \"" + rawSub + "\") must be a single token "
-                    + "(no internal whitespace — the tokenizer splits on any Unicode whitespace, "
+                    + "(no internal whitespace - the tokenizer splits on any Unicode whitespace, "
                     + "including spaces, tabs, CR and LF). "
                     + "Fix options: (a) use a single-word name like "
                     + "\"" + underscored + "\" or \"" + collapsed + "\"; "
                     + "(b) split into two methods with their own @Execute(sub = \"...\"). "
-                    + "Nested multi-word subcommands are not supported — each @Execute maps to one token.";
+                    + "Nested multi-word subcommands are not supported - each @Execute maps to one token.";
         }
         return "@Execute(sub = \"" + rawSub + "\") must use only letters, "
                 + "numbers, hyphens, or underscores (same rule as @Command(name) and "

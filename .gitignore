@@ -42,3 +42,7 @@ Thumbs.db
 # Local environment
 .env
 .env.local
+
+# Agent tooling scratch (Claude Code / subagent metadata)
+.agents/
+skills-lock.json
