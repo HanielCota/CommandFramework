@@ -22,7 +22,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Pipeline orchestrator that dispatches a parsed command invocation through its stages:
@@ -32,8 +31,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * state — all request-scoped state lives in {@link CommandContext} arguments passed through the
  * pipeline.
  *
- * <p><b>Thread-safety:</b> safe for concurrent use. Mutable collaborator state is confined to
- * {@link ConcurrentHashMap} instances owned by the dispatcher and to the platform-provided
+ * <p><b>Thread-safety:</b> safe for concurrent use. Mutable collaborator state lives inside the
+ * dispatcher's thread-safe managers (cooldown, rate limit, confirmation) and the platform-provided
  * {@link CommandMiddleware} chain; middlewares themselves must be thread-safe.
  */
 public final class CommandDispatcher {
@@ -52,7 +51,16 @@ public final class CommandDispatcher {
     private final FrameworkLogger logger;
     private final AsyncExecutor asyncExecutor;
     private final boolean debug;
-    private final Map<Class<?>, ArgumentResolver<Object>> enumResolverCache = new ConcurrentHashMap<>();
+    // ClassValue ties the cached resolver to the enum Class's own lifetime: when a plugin is
+    // reloaded and its ClassLoader is collected, the Class and its resolver entry are freed
+    // together. Using a ConcurrentHashMap here would pin both in memory forever.
+    @SuppressWarnings("unchecked")
+    private final ClassValue<ArgumentResolver<Object>> enumResolverCache = new ClassValue<>() {
+        @Override
+        protected ArgumentResolver<Object> computeValue(Class<?> type) {
+            return (ArgumentResolver<Object>) (ArgumentResolver<?>) DefaultArgumentResolvers.enumResolver(type);
+        }
+    };
 
     CommandDispatcher(
             PlatformBridge<?> bridge,
@@ -189,8 +197,18 @@ public final class CommandDispatcher {
         if (!trailingSpace || rootExecutor == null || !this.allowed(actor, rootExecutor)) {
             return subcommand;
         }
+        List<String> rootArgs = this.argumentSuggestions(actor, rootExecutor, List.of(), true, 0);
+        // Avoid the LinkedHashSet/List.copyOf allocation on the per-keystroke tab-completion path
+        // when only one side has suggestions. The merge set is only needed to dedupe subcommand
+        // names against first-argument suggestions — pointless when either list is empty.
+        if (rootArgs.isEmpty()) {
+            return subcommand;
+        }
+        if (subcommand.isEmpty()) {
+            return rootArgs;
+        }
         LinkedHashSet<String> merged = new LinkedHashSet<>(subcommand);
-        merged.addAll(this.argumentSuggestions(actor, rootExecutor, List.of(), true, 0));
+        merged.addAll(rootArgs);
         return List.copyOf(merged);
     }
 
@@ -297,16 +315,20 @@ public final class CommandDispatcher {
                 continue;
             }
 
-            String input;
+            List<String> argumentTokens = selection.argumentTokens();
+            int tokenCount = argumentTokens.size();
+            String input = null;
+            // Greedy consumes everything remaining and pins tokenIndex to the end; the follow-up
+            // check below therefore always sees tokenIndex == tokenCount and skips. For non-greedy
+            // parameters we fall through to the same check and take one token.
             if (parameter.greedy()) {
-                input = tokenIndex >= selection.argumentTokens().size()
-                        ? null
-                        : String.join(" ", selection.argumentTokens().subList(tokenIndex, selection.argumentTokens().size()));
-                tokenIndex = selection.argumentTokens().size();
-            } else if (tokenIndex < selection.argumentTokens().size()) {
-                input = selection.argumentTokens().get(tokenIndex++);
-            } else {
-                input = null;
+                if (tokenIndex < tokenCount) {
+                    input = String.join(" ", argumentTokens.subList(tokenIndex, tokenCount));
+                }
+                tokenIndex = tokenCount;
+            }
+            if (tokenIndex < tokenCount) {
+                input = argumentTokens.get(tokenIndex++);
             }
 
             if (input == null) {
@@ -682,8 +704,7 @@ public final class CommandDispatcher {
     @SuppressWarnings("unchecked")
     private ArgumentResolver<Object> resolver(Class<?> type) {
         if (type.isEnum()) {
-            return this.enumResolverCache.computeIfAbsent(type,
-                    t -> (ArgumentResolver<Object>) (ArgumentResolver<?>) DefaultArgumentResolvers.enumResolver(t));
+            return this.enumResolverCache.get(type);
         }
         ArgumentResolver<?> resolver = this.resolvers.get(type);
         if (resolver == null) {

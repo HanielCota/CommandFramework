@@ -26,6 +26,7 @@ public final class RateLimiter {
 
     private final int limit;
     private final Duration window;
+    private final long windowNanos;
     private final FrameworkLogger logger;
     private final Cache<UUID, State> states = Caffeine.newBuilder()
             .expireAfter(new Expiry<UUID, State>() {
@@ -49,6 +50,7 @@ public final class RateLimiter {
     public RateLimiter(int limit, Duration window, FrameworkLogger logger) {
         this.limit = limit;
         this.window = Objects.requireNonNull(window, "window");
+        this.windowNanos = window.toNanos();
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -88,9 +90,8 @@ public final class RateLimiter {
     }
 
     private long windowEnd(long windowStartedNanos) {
-        long nanos = this.window.toNanos();
-        long maxSafeStart = Long.MAX_VALUE - nanos;
-        return windowStartedNanos > maxSafeStart ? Long.MAX_VALUE : windowStartedNanos + nanos;
+        long maxSafeStart = Long.MAX_VALUE - this.windowNanos;
+        return windowStartedNanos > maxSafeStart ? Long.MAX_VALUE : windowStartedNanos + this.windowNanos;
     }
 
     private record State(long windowStartedNanos, int count) {

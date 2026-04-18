@@ -134,22 +134,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
             String rawSub = method.getAnnotation(Execute.class).sub();
             String sub = this.normalize(rawSub);
             if (!sub.isEmpty() && !VALID_LABEL.matcher(sub).matches()) {
-                if (this.containsWhitespace(sub)) {
-                    String collapsed = sub.replaceAll("\\s+", "");
-                    String underscored = sub.replaceAll("\\s+", "_");
-                    this.error(method, "@Execute(sub = \"" + rawSub + "\") must be a single token "
-                            + "(no internal whitespace — the tokenizer splits on any Unicode whitespace, "
-                            + "including spaces, tabs, CR and LF). "
-                            + "Fix options: (a) use a single-word name like "
-                            + "\"" + underscored + "\" or \"" + collapsed + "\"; "
-                            + "(b) split into two methods with their own @Execute(sub = \"...\"). "
-                            + "Nested multi-word subcommands are not supported — each @Execute maps to one token.");
-                } else {
-                    this.error(method, "@Execute(sub = \"" + rawSub + "\") must use only letters, "
-                            + "numbers, hyphens, or underscores (same rule as @Command(name) and "
-                            + "@Confirm(commandName)). Characters like '.', '/', ':' break Brigadier "
-                            + "lookup at runtime.");
-                }
+                this.error(method, this.invalidSubMessage(rawSub, sub));
             }
             Map<String, ExecutableElement> seen = perClass.computeIfAbsent(owner, ignored -> new HashMap<>());
             ExecutableElement previous = seen.put(sub, method);
@@ -275,7 +260,9 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
             String commandName = confirm.commandName().trim();
             if (commandName.isEmpty()) {
                 this.error(element, "@Confirm(commandName) must not be blank.");
-            } else if (!VALID_LABEL.matcher(commandName).matches()) {
+                continue;
+            }
+            if (!VALID_LABEL.matcher(commandName).matches()) {
                 this.error(element, "@Confirm(commandName) must use only letters, numbers, hyphens, or underscores.");
             }
         }
@@ -590,6 +577,24 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
             }
         }
         return false;
+    }
+
+    private String invalidSubMessage(String rawSub, String sub) {
+        if (this.containsWhitespace(sub)) {
+            String collapsed = sub.replaceAll("\\s+", "");
+            String underscored = sub.replaceAll("\\s+", "_");
+            return "@Execute(sub = \"" + rawSub + "\") must be a single token "
+                    + "(no internal whitespace — the tokenizer splits on any Unicode whitespace, "
+                    + "including spaces, tabs, CR and LF). "
+                    + "Fix options: (a) use a single-word name like "
+                    + "\"" + underscored + "\" or \"" + collapsed + "\"; "
+                    + "(b) split into two methods with their own @Execute(sub = \"...\"). "
+                    + "Nested multi-word subcommands are not supported — each @Execute maps to one token.";
+        }
+        return "@Execute(sub = \"" + rawSub + "\") must use only letters, "
+                + "numbers, hyphens, or underscores (same rule as @Command(name) and "
+                + "@Confirm(commandName)). Characters like '.', '/', ':' break Brigadier "
+                + "lookup at runtime.";
     }
 
     private String normalize(String value) {

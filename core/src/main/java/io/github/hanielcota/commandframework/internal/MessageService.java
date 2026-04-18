@@ -89,6 +89,12 @@ public final class MessageService {
 
     private String applyPlaceholders(String template, Map<String, String> placeholders) {
         Objects.requireNonNull(template, "template");
+        // With no placeholders supplied every {key} match would fall through to the "raw == null"
+        // branch below and be kept verbatim — producing an output identical to the input. Skip the
+        // regex scan entirely in that case; this is the hot path for parameterless system messages.
+        if (placeholders.isEmpty()) {
+            return template;
+        }
         // Single-pass scan: each {key} match in the template is replaced exactly once from the map,
         // so a user-controlled value like "{otherKey}" is never re-interpreted as a placeholder.
         // Unknown keys are left verbatim so missing placeholders are visible instead of silently empty.

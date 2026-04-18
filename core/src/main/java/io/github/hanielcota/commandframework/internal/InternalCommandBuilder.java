@@ -528,9 +528,9 @@ public final class InternalCommandBuilder<S> {
             Parameter parameter = parameters[index];
             if (parameter.isAnnotationPresent(Sender.class)) {
                 definitions.add(this.senderDefinition(method, parameter));
-            } else {
-                definitions.add(this.argumentDefinition(method, parameter, resolvers, index, parameters.length));
+                continue;
             }
+            definitions.add(this.argumentDefinition(method, parameter, resolvers, index, parameters.length));
         }
         return List.copyOf(definitions);
     }
