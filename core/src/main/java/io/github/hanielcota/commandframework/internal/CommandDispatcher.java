@@ -354,6 +354,13 @@ public final class CommandDispatcher {
         return null;
     }
 
+    /**
+     * Emits a best-effort debug trace of a dispatch. Format:
+     * <pre>[cf] dispatch actor=&lt;sanitized-name&gt; label=&lt;sanitized-label&gt; path=&lt;cmd-path&gt; result=&lt;CommandResult simple name&gt; tookUs=&lt;micros&gt;</pre>
+     *
+     * <p>The format is intentionally unstable across minor versions. Operators who
+     * parse it in log pipelines should pin a framework version or re-validate on upgrade.
+     */
     private void traceDispatch(CommandActor actor, String label, String path, CommandResult result, long startedNanos) {
         long tookMicros = (System.nanoTime() - startedNanos) / 1_000L;
         String resultName = result.getClass().getSimpleName();
