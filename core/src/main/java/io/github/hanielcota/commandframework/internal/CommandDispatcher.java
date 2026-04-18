@@ -9,15 +9,13 @@ import io.github.hanielcota.commandframework.CommandResult;
 import io.github.hanielcota.commandframework.FrameworkLogger;
 import io.github.hanielcota.commandframework.MessageKey;
 import io.github.hanielcota.commandframework.PlatformBridge;
-import net.kyori.adventure.text.Component;
 
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiPredicate;
 
 /**
  * Pipeline orchestrator that dispatches a parsed command invocation through its stages:
@@ -47,6 +45,7 @@ public final class CommandDispatcher {
     private final boolean debug;
     private final ArgumentPreparer argumentPreparer;
     private final CommandSuggestionEngine suggestionEngine;
+    private final CommandResultEmitter resultEmitter;
 
     CommandDispatcher(
             PlatformBridge<?> bridge,
@@ -75,12 +74,14 @@ public final class CommandDispatcher {
         this.asyncExecutor = Objects.requireNonNull(asyncExecutor, "asyncExecutor");
         this.debug = debug;
         this.argumentPreparer = new ArgumentPreparer(this.resolvers, this.bridge);
+        BiPredicate<CommandActor, ExecutorDefinition> permissionGate = this::allowed;
+        this.resultEmitter = new CommandResultEmitter(this.messages, permissionGate);
         this.suggestionEngine = new CommandSuggestionEngine(
                 this.commandsByLabel,
                 this.tokenizer,
                 this.messages,
                 this.logger,
-                this::allowed,
+                permissionGate,
                 this.argumentPreparer::resolver
         );
     }
@@ -109,13 +110,13 @@ public final class CommandDispatcher {
             Selection selection = this.select(command, tokenizedInput);
             if (selection == null) {
                 this.suggestionEngine.emitDidYouMean(actor, command, tokenizedInput);
-                this.sendHelp(actor, command, label);
+                this.resultEmitter.sendHelp(actor, command, label);
                 return new CommandResult.HelpShown();
             }
 
             CommandContext context = new CommandContext(actor, label, rawArguments, selection.argumentTokens(), selection.commandPath());
             CommandResult result = this.invokeMiddleware(0, context, ctx -> this.executeSelection(ctx.actor(), command, ctx.label(), selection));
-            CommandResult emitted = this.emit(actor, Objects.requireNonNull(result, "Middleware chain must not return null"));
+            CommandResult emitted = this.resultEmitter.emit(actor, Objects.requireNonNull(result, "Middleware chain must not return null"));
             if (this.debug) {
                 this.traceDispatch(actor, label, selection.commandPath(), emitted, startedNanos);
             }
@@ -127,32 +128,32 @@ public final class CommandDispatcher {
             this.messages.send(actor, MessageKey.TOO_MANY_ARGUMENTS, Map.of("input", exception.input));
             return CommandResult.handled();
         } catch (ArgumentPreparer.InvalidInputException exception) {
-            return this.emit(actor, new CommandResult.InvalidArgs(exception.argumentName, exception.input));
+            return this.resultEmitter.emit(actor, new CommandResult.InvalidArgs(exception.argumentName, exception.input));
         } catch (RuntimeException exception) {
             this.logger.error("Unhandled command exception while dispatching " + LogSafety.sanitize(label), exception);
-            return this.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
+            return this.resultEmitter.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
         }
     }
 
     public CommandResult dispatchConfirmation(CommandActor actor, String label) {
         PreparedInvocation invocation = this.confirmationManager.consume(actor, label);
         if (invocation == null) {
-            return this.emit(actor, CommandResult.failure(MessageKey.CONFIRM_NOTHING_PENDING));
+            return this.resultEmitter.emit(actor, CommandResult.failure(MessageKey.CONFIRM_NOTHING_PENDING));
         }
         try {
             CommandResult blocked = this.preflight(actor, invocation.executor());
             if (blocked != null) {
-                return this.emit(actor, blocked);
+                return this.resultEmitter.emit(actor, blocked);
             }
             CommandResult cooldownBlocked = this.consumeCooldown(actor, invocation.executor(), invocation.commandPath());
             if (cooldownBlocked != null) {
-                return this.emit(actor, cooldownBlocked);
+                return this.resultEmitter.emit(actor, cooldownBlocked);
             }
             CommandResult result = this.executePrepared(actor, invocation);
-            return this.emit(actor, result);
+            return this.resultEmitter.emit(actor, result);
         } catch (RuntimeException exception) {
             this.logger.error("Unhandled command exception while confirming " + LogSafety.sanitize(label), exception);
-            return this.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
+            return this.resultEmitter.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
         }
     }
 
@@ -256,7 +257,7 @@ public final class CommandDispatcher {
                     return;
                 }
                 try {
-                    this.emit(actor, result);
+                    this.resultEmitter.emit(actor, result);
                 } catch (Exception exception) {
                     // Command body completed; only result emission failed (e.g. plugin disabled
                     // mid-flight, message renderer threw). Log as warn to avoid flagging a
@@ -351,57 +352,4 @@ public final class CommandDispatcher {
                 + " label=" + LogSafety.sanitize(label) + " path=" + path
                 + " result=" + resultName + " tookUs=" + tookMicros);
     }
-
-
-    private CommandResult emit(CommandActor actor, CommandResult result) {
-        switch (result) {
-            case CommandResult.Failure(MessageKey key, Map<String, String> placeholders) ->
-                this.messages.send(actor, key, placeholders);
-            case CommandResult.InvalidArgs(String argumentName, String input) ->
-                this.messages.send(actor, MessageKey.INVALID_ARGUMENT, Map.of(
-                        "name", argumentName,
-                        "input", input
-                ));
-            case CommandResult.NoPermission ignored ->
-                this.messages.send(actor, MessageKey.NO_PERMISSION);
-            case CommandResult.PlayerOnly ignored ->
-                this.messages.send(actor, MessageKey.PLAYER_ONLY);
-            case CommandResult.CooldownActive(Duration remaining) ->
-                this.messages.send(actor, MessageKey.COOLDOWN_ACTIVE, Map.of(
-                        "remaining", this.messages.formatDuration(remaining)
-                ));
-            case CommandResult.PendingConfirmation(String commandName, Duration expiresIn) ->
-                this.messages.send(actor, MessageKey.CONFIRM_PROMPT, Map.of(
-                        "command", commandName,
-                        "seconds", String.valueOf(Math.max(1L, expiresIn.toSeconds()))
-                ));
-            default -> { /* Success / Handled / HelpShown / RateLimited - nothing to emit */ }
-        }
-        return result;
-    }
-
-    private void sendHelp(CommandActor actor, CommandDefinition command, String label) {
-        List<Component> lines = new ArrayList<>();
-        lines.add(this.messages.render(MessageKey.HELP_HEADER, Map.of("command", label)));
-
-        if (command.rootExecutor() != null && this.allowed(actor, command.rootExecutor())) {
-            lines.add(this.messages.render(MessageKey.HELP_ENTRY, Map.of(
-                    "usage", label,
-                    "description", command.rootExecutor().description()
-            )));
-        }
-
-        for (Map.Entry<String, ExecutorDefinition> entry : command.executorsBySubcommand().entrySet()) {
-            if (!this.allowed(actor, entry.getValue())) {
-                continue;
-            }
-            lines.add(this.messages.render(MessageKey.HELP_ENTRY, Map.of(
-                    "usage", label + " " + entry.getKey(),
-                    "description", entry.getValue().description()
-            )));
-        }
-
-        actor.sendMessage(this.messages.renderLines(lines.toArray(Component[]::new)));
-    }
-
 }
