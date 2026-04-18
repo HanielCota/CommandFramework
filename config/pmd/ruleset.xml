@@ -25,7 +25,7 @@
         <exclude name="AvoidLiteralsInIfCondition"/>
         <exclude name="AvoidDuplicateLiterals"/>
         <!--
-          Optional-style input-missing sentinel in CommandDispatcher.prepareInvocation uses a local
+          Optional-style input-missing sentinel in ArgumentPreparer.prepare uses a local
           String that is intentionally nulled to represent "no token" before the optional/required
           branch runs; rewriting to Optional<String> adds boxing with no readability gain.
         -->

@@ -1,7 +1,5 @@
 package io.github.hanielcota.commandframework.internal;
 
-import io.github.hanielcota.commandframework.ArgumentResolutionContext;
-import io.github.hanielcota.commandframework.ArgumentResolveException;
 import io.github.hanielcota.commandframework.ArgumentResolver;
 import io.github.hanielcota.commandframework.AsyncExecutor;
 import io.github.hanielcota.commandframework.CommandActor;
@@ -11,38 +9,36 @@ import io.github.hanielcota.commandframework.CommandResult;
 import io.github.hanielcota.commandframework.FrameworkLogger;
 import io.github.hanielcota.commandframework.MessageKey;
 import io.github.hanielcota.commandframework.PlatformBridge;
-import net.kyori.adventure.text.Component;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
 
 /**
- * Pipeline orchestrator that dispatches a parsed command invocation through its stages:
- * permission check, player-only check, cooldown, argument parsing, confirmation and execution.
+ * Pipeline orchestrator for command dispatch. Delegates tab-completion to
+ * {@link CommandSuggestionEngine}, argument parsing and sender binding to
+ * {@link ArgumentPreparer}, and user-facing result rendering to
+ * {@link CommandResultEmitter}. The dispatcher itself owns only the
+ * orchestration: selector, middleware chain, preflight (permission / player-only)
+ * gate, cooldown coordination, confirmation routing, and async execution.
  *
- * <p>A single instance is shared by all commands registered in a framework. It holds no per-call
- * state - all request-scoped state lives in {@link CommandContext} arguments passed through the
- * pipeline.
+ * <p>A single instance is shared by all commands registered in a framework. It
+ * holds no per-call state - all request-scoped state lives in {@link CommandContext}
+ * arguments passed through the pipeline.
  *
- * <p><b>Thread-safety:</b> safe for concurrent use. Mutable collaborator state lives inside the
- * dispatcher's thread-safe managers (cooldown, rate limit, confirmation) and the platform-provided
- * {@link CommandMiddleware} chain; middlewares themselves must be thread-safe.
+ * <p><b>Thread-safety:</b> safe for concurrent use. Mutable collaborator state
+ * lives inside thread-safe managers (cooldown, rate limit, confirmation) and
+ * the platform-provided {@link CommandMiddleware} chain; middlewares themselves
+ * must be thread-safe.
  */
 public final class CommandDispatcher {
-
-    private static final Object SENDER_ARGUMENT = new Object();
 
     private final PlatformBridge<?> bridge;
     private final Map<String, CommandDefinition> commandsByLabel;
     private final Set<String> confirmationCommands;
-    private final Map<Class<?>, ArgumentResolver<?>> resolvers;
     private final List<CommandMiddleware> middlewares;
     private final MessageService messages;
     private final CommandTokenizer tokenizer;
@@ -51,16 +47,9 @@ public final class CommandDispatcher {
     private final FrameworkLogger logger;
     private final AsyncExecutor asyncExecutor;
     private final boolean debug;
-    // ClassValue ties the cached resolver to the enum Class's own lifetime: when a plugin is
-    // reloaded and its ClassLoader is collected, the Class and its resolver entry are freed
-    // together. Using a ConcurrentHashMap here would pin both in memory forever.
-    @SuppressWarnings("unchecked")
-    private final ClassValue<ArgumentResolver<Object>> enumResolverCache = new ClassValue<>() {
-        @Override
-        protected ArgumentResolver<Object> computeValue(Class<?> type) {
-            return (ArgumentResolver<Object>) (ArgumentResolver<?>) DefaultArgumentResolvers.enumResolver(type);
-        }
-    };
+    private final ArgumentPreparer argumentPreparer;
+    private final CommandSuggestionEngine suggestionEngine;
+    private final CommandResultEmitter resultEmitter;
 
     CommandDispatcher(
             PlatformBridge<?> bridge,
@@ -79,7 +68,6 @@ public final class CommandDispatcher {
         this.bridge = Objects.requireNonNull(bridge, "bridge");
         this.commandsByLabel = Map.copyOf(Objects.requireNonNull(commandsByLabel, "commandsByLabel"));
         this.confirmationCommands = Set.copyOf(Objects.requireNonNull(confirmationCommands, "confirmationCommands"));
-        this.resolvers = Map.copyOf(Objects.requireNonNull(resolvers, "resolvers"));
         this.middlewares = List.copyOf(Objects.requireNonNull(middlewares, "middlewares"));
         this.messages = Objects.requireNonNull(messages, "messages");
         this.tokenizer = Objects.requireNonNull(tokenizer, "tokenizer");
@@ -88,6 +76,19 @@ public final class CommandDispatcher {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.asyncExecutor = Objects.requireNonNull(asyncExecutor, "asyncExecutor");
         this.debug = debug;
+        this.argumentPreparer = new ArgumentPreparer(
+                Map.copyOf(Objects.requireNonNull(resolvers, "resolvers")),
+                this.bridge);
+        BiPredicate<CommandActor, ExecutorDefinition> permissionGate = this::allowed;
+        this.resultEmitter = new CommandResultEmitter(this.messages, permissionGate);
+        this.suggestionEngine = new CommandSuggestionEngine(
+                this.commandsByLabel,
+                this.tokenizer,
+                this.messages,
+                this.logger,
+                permissionGate,
+                this.argumentPreparer::resolver
+        );
     }
 
     public CommandResult dispatch(CommandActor actor, String label, String rawArguments) {
@@ -113,122 +114,56 @@ public final class CommandDispatcher {
             TokenizedInput tokenizedInput = this.tokenizer.tokenize(rawArguments);
             Selection selection = this.select(command, tokenizedInput);
             if (selection == null) {
-                this.suggestSubcommand(actor, command, tokenizedInput);
-                this.sendHelp(actor, command, label);
+                this.suggestionEngine.emitDidYouMean(actor, command, tokenizedInput);
+                this.resultEmitter.sendHelp(actor, command, label);
                 return new CommandResult.HelpShown();
             }
 
             CommandContext context = new CommandContext(actor, label, rawArguments, selection.argumentTokens(), selection.commandPath());
             CommandResult result = this.invokeMiddleware(0, context, ctx -> this.executeSelection(ctx.actor(), command, ctx.label(), selection));
-            CommandResult emitted = this.emit(actor, Objects.requireNonNull(result, "Middleware chain must not return null"));
+            CommandResult emitted = this.resultEmitter.emit(actor, Objects.requireNonNull(result, "Middleware chain must not return null"));
             if (this.debug) {
                 this.traceDispatch(actor, label, selection.commandPath(), emitted, startedNanos);
             }
             return emitted;
-        } catch (MissingArgumentException exception) {
+        } catch (ArgumentPreparer.MissingArgumentException exception) {
             this.messages.send(actor, MessageKey.MISSING_ARGUMENT, Map.of("name", exception.argumentName));
             return CommandResult.handled();
-        } catch (TooManyArgumentsException exception) {
+        } catch (ArgumentPreparer.TooManyArgumentsException exception) {
             this.messages.send(actor, MessageKey.TOO_MANY_ARGUMENTS, Map.of("input", exception.input));
             return CommandResult.handled();
-        } catch (InvalidInputException exception) {
-            return this.emit(actor, new CommandResult.InvalidArgs(exception.argumentName, exception.input));
+        } catch (ArgumentPreparer.InvalidInputException exception) {
+            return this.resultEmitter.emit(actor, new CommandResult.InvalidArgs(exception.argumentName, exception.input));
         } catch (RuntimeException exception) {
             this.logger.error("Unhandled command exception while dispatching " + LogSafety.sanitize(label), exception);
-            return this.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
+            return this.resultEmitter.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
         }
     }
 
     public CommandResult dispatchConfirmation(CommandActor actor, String label) {
         PreparedInvocation invocation = this.confirmationManager.consume(actor, label);
         if (invocation == null) {
-            return this.emit(actor, CommandResult.failure(MessageKey.CONFIRM_NOTHING_PENDING));
+            return this.resultEmitter.emit(actor, CommandResult.failure(MessageKey.CONFIRM_NOTHING_PENDING));
         }
         try {
             CommandResult blocked = this.preflight(actor, invocation.executor());
             if (blocked != null) {
-                return this.emit(actor, blocked);
+                return this.resultEmitter.emit(actor, blocked);
             }
             CommandResult cooldownBlocked = this.consumeCooldown(actor, invocation.executor(), invocation.commandPath());
             if (cooldownBlocked != null) {
-                return this.emit(actor, cooldownBlocked);
+                return this.resultEmitter.emit(actor, cooldownBlocked);
             }
             CommandResult result = this.executePrepared(actor, invocation);
-            return this.emit(actor, result);
+            return this.resultEmitter.emit(actor, result);
         } catch (RuntimeException exception) {
             this.logger.error("Unhandled command exception while confirming " + LogSafety.sanitize(label), exception);
-            return this.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
+            return this.resultEmitter.emit(actor, CommandResult.failure(MessageKey.COMMAND_ERROR));
         }
     }
 
     public List<String> suggest(CommandActor actor, String label, String rawArguments) {
-        try {
-            CommandDefinition command = this.commandsByLabel.get(label.toLowerCase(Locale.ROOT));
-            if (command == null) {
-                return List.of();
-            }
-            TokenizedInput tokenizedInput = this.tokenizer.tokenize(rawArguments);
-            if (tokenizedInput.tokens().isEmpty()) {
-                return this.emptyTokenSuggestions(actor, command, tokenizedInput.trailingSpace());
-            }
-
-            String firstToken = tokenizedInput.tokens().getFirst().toLowerCase(Locale.ROOT);
-            ExecutorDefinition subcommand = command.executorsBySubcommand().get(firstToken);
-            if (subcommand == null) {
-                return this.rootExecutorSuggestions(actor, command, tokenizedInput, firstToken);
-            }
-
-            if (tokenizedInput.tokens().size() == 1 && !tokenizedInput.trailingSpace()) {
-                return this.subcommandSuggestions(actor, command, firstToken);
-            }
-            if (!this.allowed(actor, subcommand)) {
-                return List.of();
-            }
-            return this.argumentSuggestions(actor, subcommand, tokenizedInput.tokens(), tokenizedInput.trailingSpace(), 1);
-        } catch (RuntimeException exception) {
-            this.logger.warn("Exception during tab completion for " + LogSafety.sanitize(label), exception);
-            return List.of();
-        }
-    }
-
-    private List<String> emptyTokenSuggestions(CommandActor actor, CommandDefinition command, boolean trailingSpace) {
-        List<String> subcommand = this.subcommandSuggestions(actor, command, "");
-        ExecutorDefinition rootExecutor = command.rootExecutor();
-        if (!trailingSpace || rootExecutor == null || !this.allowed(actor, rootExecutor)) {
-            return subcommand;
-        }
-        List<String> rootArgs = this.argumentSuggestions(actor, rootExecutor, List.of(), true, 0);
-        // Avoid the LinkedHashSet/List.copyOf allocation on the per-keystroke tab-completion path
-        // when only one side has suggestions. The merge set is only needed to dedupe subcommand
-        // names against first-argument suggestions - pointless when either list is empty.
-        if (rootArgs.isEmpty()) {
-            return subcommand;
-        }
-        if (subcommand.isEmpty()) {
-            return rootArgs;
-        }
-        LinkedHashSet<String> merged = new LinkedHashSet<>(subcommand);
-        merged.addAll(rootArgs);
-        return List.copyOf(merged);
-    }
-
-    private List<String> rootExecutorSuggestions(
-            CommandActor actor,
-            CommandDefinition command,
-            TokenizedInput tokenizedInput,
-            String firstToken
-    ) {
-        ExecutorDefinition rootExecutor = command.rootExecutor();
-        if (!tokenizedInput.trailingSpace()) {
-            List<String> subSuggestions = this.subcommandSuggestions(actor, command, firstToken);
-            if (!subSuggestions.isEmpty() || rootExecutor == null) {
-                return subSuggestions;
-            }
-        }
-        if (rootExecutor == null || !this.allowed(actor, rootExecutor)) {
-            return List.of();
-        }
-        return this.argumentSuggestions(actor, rootExecutor, tokenizedInput.tokens(), tokenizedInput.trailingSpace(), 0);
+        return this.suggestionEngine.suggest(actor, label, rawArguments);
     }
 
     public ConfirmationManager confirmationManager() {
@@ -264,9 +199,10 @@ public final class CommandDispatcher {
         }
 
         // Cooldown is evaluated AFTER argument parsing so that a syntax error (MissingArgumentException /
-        // ArgumentResolveException raised from prepareInvocation) does not consume the sender's cooldown
-        // window. Otherwise a user who typo'd arguments would be locked out on their legitimate retry.
-        PreparedInvocation invocation = this.prepareInvocation(actor, command, label, selection);
+        // InvalidInputException raised from ArgumentPreparer.prepare) does not consume the sender's
+        // cooldown window. Otherwise a user who typo'd arguments would be locked out on their
+        // legitimate retry.
+        PreparedInvocation invocation = this.argumentPreparer.prepare(actor, command, label, selection);
 
         if (executor.confirm() != null) {
             // Peek cooldown without consuming - if the sender is already on cooldown from a prior
@@ -303,103 +239,6 @@ public final class CommandDispatcher {
         return null;
     }
 
-    private PreparedInvocation prepareInvocation(CommandActor actor, CommandDefinition command, String label, Selection selection) {
-        int parameterCount = selection.executor().parameters().size();
-        List<Object> resolvedValues = new ArrayList<>(parameterCount);
-        List<Object> previousArguments = new ArrayList<>(parameterCount);
-        int tokenIndex = 0;
-
-        for (ParameterDefinition parameter : selection.executor().parameters()) {
-            if (parameter.sender()) {
-                resolvedValues.add(SENDER_ARGUMENT);
-                continue;
-            }
-
-            List<String> argumentTokens = selection.argumentTokens();
-            int tokenCount = argumentTokens.size();
-            String input = null;
-            // Greedy consumes everything remaining and pins tokenIndex to the end; the follow-up
-            // check below therefore always sees tokenIndex == tokenCount and skips. For non-greedy
-            // parameters we fall through to the same check and take one token.
-            if (parameter.greedy()) {
-                if (tokenIndex < tokenCount) {
-                    input = String.join(" ", argumentTokens.subList(tokenIndex, tokenCount));
-                }
-                tokenIndex = tokenCount;
-            }
-            if (tokenIndex < tokenCount) {
-                input = argumentTokens.get(tokenIndex++);
-            }
-
-            if (input == null) {
-                if (!parameter.optional()) {
-                    throw new MissingArgumentException(parameter.name());
-                }
-                Object defaultValue = this.defaultValue(actor, label, selection.commandPath(), parameter, previousArguments);
-                resolvedValues.add(defaultValue);
-                previousArguments.add(defaultValue);
-                continue;
-            }
-
-            if (input.length() > parameter.maxLength()) {
-                throw new InvalidInputException(parameter.name(), input);
-            }
-
-            Object resolved = this.resolveArgument(actor, label, selection.commandPath(), parameter, input, previousArguments);
-            resolvedValues.add(resolved);
-            previousArguments.add(resolved);
-        }
-        if (tokenIndex < selection.argumentTokens().size()) {
-            throw new TooManyArgumentsException(selection.argumentTokens().get(tokenIndex));
-        }
-
-        return new PreparedInvocation(command, selection.executor(), label, selection.commandPath(), resolvedValues);
-    }
-
-    private Object defaultValue(
-            CommandActor actor,
-            String label,
-            String commandPath,
-            ParameterDefinition parameter,
-            List<Object> previousArguments
-    ) {
-        if (parameter.javaOptional()
-                && io.github.hanielcota.commandframework.annotation.Optional.UNSET.equals(parameter.optionalValue())) {
-            return Optional.empty();
-        }
-
-        if (io.github.hanielcota.commandframework.annotation.Optional.UNSET.equals(parameter.optionalValue())) {
-            throw new MissingArgumentException(parameter.name());
-        }
-
-        // resolveArgument already wraps in Optional.of(...) when parameter.javaOptional() is true.
-        // Do NOT re-wrap here - doing so yields Optional<Optional<X>> and breaks reflective invoke.
-        return this.resolveArgument(actor, label, commandPath, parameter, parameter.optionalValue(), previousArguments);
-    }
-
-    private Object resolveArgument(
-            CommandActor actor,
-            String label,
-            String commandPath,
-            ParameterDefinition parameter,
-            String input,
-            List<Object> previousArguments
-    ) {
-        try {
-            ArgumentResolutionContext context = new ArgumentResolutionContext(actor, label, commandPath, previousArguments);
-            Object value = this.resolver(parameter.resolvedType()).resolve(context, input);
-            if (value == null) {
-                // Use getSimpleName() - keeps the diagnostic human-readable without leaking the
-                // consumer's package layout if this message ever ends up in a user-facing surface.
-                throw new ArgumentResolveException(
-                        parameter.name(), input, "Resolver returned null for " + parameter.resolvedType().getSimpleName());
-            }
-            return parameter.javaOptional() ? Optional.of(value) : value;
-        } catch (ArgumentResolveException exception) {
-            throw new InvalidInputException(parameter.name(), input, exception);
-        }
-    }
-
     /**
      * Executes a prepared invocation either synchronously or on the async executor.
      *
@@ -423,7 +262,7 @@ public final class CommandDispatcher {
                     return;
                 }
                 try {
-                    this.emit(actor, result);
+                    this.resultEmitter.emit(actor, result);
                 } catch (Exception exception) {
                     // Command body completed; only result emission failed (e.g. plugin disabled
                     // mid-flight, message renderer threw). Log as warn to avoid flagging a
@@ -438,13 +277,13 @@ public final class CommandDispatcher {
 
     private CommandResult invokeMethod(CommandActor actor, PreparedInvocation invocation) {
         try {
-            Object[] arguments = this.buildArguments(actor, invocation.executor(), invocation.preparedArguments());
+            Object[] arguments = this.argumentPreparer.bindArguments(actor, invocation);
             Object result = invocation.executor().invoker().invoke(invocation.command().instance(), arguments);
             if (result == null) {
                 return CommandResult.success();
             }
             return (CommandResult) result;
-        } catch (PlayerOnlySignal ignored) {
+        } catch (ArgumentPreparer.PlayerOnlySignal ignored) {
             return new CommandResult.PlayerOnly();
         } catch (Error error) {
             // Let Error (OOM, StackOverflow, LinkageError) propagate to the JVM - swallowing
@@ -457,37 +296,6 @@ public final class CommandDispatcher {
             this.logger.error("Unhandled command exception in " + invocation.commandPath(), exception);
             return CommandResult.failure(MessageKey.COMMAND_ERROR);
         }
-    }
-
-    private Object[] buildArguments(CommandActor actor, ExecutorDefinition executor, List<Object> preparedArguments) {
-        List<ParameterDefinition> parameters = executor.parameters();
-        Object[] arguments = new Object[parameters.size()];
-        for (int index = 0; index < parameters.size(); index++) {
-            ParameterDefinition parameter = parameters.get(index);
-            Object value = preparedArguments.get(index);
-            if (value != SENDER_ARGUMENT) {
-                arguments[index] = value;
-                continue;
-            }
-
-            if (parameter.rawType().isInstance(actor.platformSender())) {
-                arguments[index] = actor.platformSender();
-                continue;
-            }
-            if (parameter.rawType().isAssignableFrom(actor.getClass())) {
-                arguments[index] = actor;
-                continue;
-            }
-            if (parameter.rawType() == CommandActor.class) {
-                arguments[index] = actor;
-                continue;
-            }
-            if (this.bridge.isPlayerSenderType(parameter.rawType())) {
-                throw new PlayerOnlySignal();
-            }
-            throw new IllegalStateException("Unsupported sender type at runtime: " + parameter.rawType().getName());
-        }
-        return arguments;
     }
 
     private Selection select(CommandDefinition command, TokenizedInput tokenizedInput) {
@@ -524,105 +332,6 @@ public final class CommandDispatcher {
         return false;
     }
 
-    private void suggestSubcommand(CommandActor actor, CommandDefinition command, TokenizedInput tokenizedInput) {
-        if (tokenizedInput.tokens().isEmpty()) {
-            return;
-        }
-        String typed = tokenizedInput.tokens().getFirst().toLowerCase(Locale.ROOT);
-        // Skip did-you-mean for very short tokens - any 2-char typo is within edit distance 2 of
-        // most short subcommand names, which produces irrelevant suggestions.
-        if (typed.length() < 3) {
-            return;
-        }
-        String closest = null;
-        int bestDistance = Integer.MAX_VALUE;
-        int threshold = Math.min(3, Math.max(1, typed.length() / 3));
-        for (Map.Entry<String, ExecutorDefinition> entry : command.executorsBySubcommand().entrySet()) {
-            if (!this.allowed(actor, entry.getValue())) {
-                continue;
-            }
-            String candidate = entry.getKey();
-            int distance = levenshtein(typed, candidate);
-            if (distance < bestDistance && distance <= threshold) {
-                bestDistance = distance;
-                closest = candidate;
-            }
-        }
-        if (closest != null) {
-            this.messages.send(actor, MessageKey.UNKNOWN_SUBCOMMAND, Map.of(
-                    "typed", typed,
-                    "command", command.name(),
-                    "suggestion", closest));
-        }
-    }
-
-    private static int levenshtein(String a, String b) {
-        int[] previous = new int[b.length() + 1];
-        int[] current = new int[b.length() + 1];
-        for (int j = 0; j <= b.length(); j++) {
-            previous[j] = j;
-        }
-        for (int i = 1; i <= a.length(); i++) {
-            current[0] = i;
-            for (int j = 1; j <= b.length(); j++) {
-                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
-                current[j] = Math.min(
-                        Math.min(current[j - 1] + 1, previous[j] + 1),
-                        previous[j - 1] + cost);
-            }
-            int[] swap = previous;
-            previous = current;
-            current = swap;
-        }
-        return previous[b.length()];
-    }
-
-    private List<String> subcommandSuggestions(CommandActor actor, CommandDefinition command, String prefix) {
-        String lowered = prefix.toLowerCase(Locale.ROOT);
-        Map<String, ExecutorDefinition> executors = command.executorsBySubcommand();
-        List<String> suggestions = new ArrayList<>(executors.size());
-        for (Map.Entry<String, ExecutorDefinition> entry : executors.entrySet()) {
-            if (!entry.getKey().startsWith(lowered)) {
-                continue;
-            }
-            if (!this.allowed(actor, entry.getValue())) {
-                continue;
-            }
-            suggestions.add(entry.getKey());
-        }
-        return List.copyOf(suggestions);
-    }
-
-    private List<String> argumentSuggestions(
-            CommandActor actor,
-            ExecutorDefinition executor,
-            List<String> tokens,
-            boolean trailingSpace,
-            int tokenOffset
-    ) {
-        List<ParameterDefinition> arguments = executor.suggestableParameters();
-        if (arguments.isEmpty()) {
-            return List.of();
-        }
-
-        int consumed = trailingSpace ? tokens.size() - tokenOffset : tokens.size() - tokenOffset - 1;
-        if (consumed < 0) {
-            consumed = 0;
-        }
-        if (consumed >= arguments.size()) {
-            return List.of();
-        }
-        int parameterIndex = consumed;
-        ParameterDefinition parameter = arguments.get(parameterIndex);
-        if (parameter.greedy()) {
-            return List.of();
-        }
-
-        String currentInput = trailingSpace ? "" : tokens.getLast();
-        List<String> suggestions = this.resolver(parameter.resolvedType()).suggest(actor, currentInput);
-        return suggestions != null ? suggestions : List.of();
-    }
-
     // Derived from preflight() so both paths cannot drift - any new gate added to preflight
     // (world restriction, feature flag, etc.) is automatically reflected in tab completion,
     // help rendering, and did-you-mean filtering without a second edit.
@@ -647,122 +356,5 @@ public final class CommandDispatcher {
         this.logger.info("[cf] dispatch actor=" + LogSafety.sanitize(actor.name())
                 + " label=" + LogSafety.sanitize(label) + " path=" + path
                 + " result=" + resultName + " tookUs=" + tookMicros);
-    }
-
-
-    private CommandResult emit(CommandActor actor, CommandResult result) {
-        switch (result) {
-            case CommandResult.Failure(MessageKey key, Map<String, String> placeholders) ->
-                this.messages.send(actor, key, placeholders);
-            case CommandResult.InvalidArgs(String argumentName, String input) ->
-                this.messages.send(actor, MessageKey.INVALID_ARGUMENT, Map.of(
-                        "name", argumentName,
-                        "input", input
-                ));
-            case CommandResult.NoPermission ignored ->
-                this.messages.send(actor, MessageKey.NO_PERMISSION);
-            case CommandResult.PlayerOnly ignored ->
-                this.messages.send(actor, MessageKey.PLAYER_ONLY);
-            case CommandResult.CooldownActive(Duration remaining) ->
-                this.messages.send(actor, MessageKey.COOLDOWN_ACTIVE, Map.of(
-                        "remaining", this.messages.formatDuration(remaining)
-                ));
-            case CommandResult.PendingConfirmation(String commandName, Duration expiresIn) ->
-                this.messages.send(actor, MessageKey.CONFIRM_PROMPT, Map.of(
-                        "command", commandName,
-                        "seconds", String.valueOf(Math.max(1L, expiresIn.toSeconds()))
-                ));
-            default -> { /* Success / Handled / HelpShown / RateLimited - nothing to emit */ }
-        }
-        return result;
-    }
-
-    private void sendHelp(CommandActor actor, CommandDefinition command, String label) {
-        List<Component> lines = new ArrayList<>();
-        lines.add(this.messages.render(MessageKey.HELP_HEADER, Map.of("command", label)));
-
-        if (command.rootExecutor() != null && this.allowed(actor, command.rootExecutor())) {
-            lines.add(this.messages.render(MessageKey.HELP_ENTRY, Map.of(
-                    "usage", label,
-                    "description", command.rootExecutor().description()
-            )));
-        }
-
-        for (Map.Entry<String, ExecutorDefinition> entry : command.executorsBySubcommand().entrySet()) {
-            if (!this.allowed(actor, entry.getValue())) {
-                continue;
-            }
-            lines.add(this.messages.render(MessageKey.HELP_ENTRY, Map.of(
-                    "usage", label + " " + entry.getKey(),
-                    "description", entry.getValue().description()
-            )));
-        }
-
-        actor.sendMessage(this.messages.renderLines(lines.toArray(Component[]::new)));
-    }
-
-    @SuppressWarnings("unchecked")
-    private ArgumentResolver<Object> resolver(Class<?> type) {
-        if (type.isEnum()) {
-            return this.enumResolverCache.get(type);
-        }
-        ArgumentResolver<?> resolver = this.resolvers.get(type);
-        if (resolver == null) {
-            throw new IllegalStateException("No argument resolver registered for " + type.getName());
-        }
-        return (ArgumentResolver<Object>) resolver;
-    }
-
-    private static final class MissingArgumentException extends RuntimeException {
-        private final String argumentName;
-
-        private MissingArgumentException(String argumentName) {
-            this.argumentName = argumentName;
-        }
-
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
-    }
-
-    private static final class InvalidInputException extends RuntimeException {
-        private final String argumentName;
-        private final String input;
-
-        private InvalidInputException(String argumentName, String input) {
-            this(argumentName, input, null);
-        }
-
-        private InvalidInputException(String argumentName, String input, Throwable cause) {
-            super(cause);
-            this.argumentName = argumentName;
-            this.input = input;
-        }
-
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
-    }
-
-    private static final class TooManyArgumentsException extends RuntimeException {
-        private final String input;
-
-        private TooManyArgumentsException(String input) {
-            this.input = input;
-        }
-
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
-    }
-
-    private static final class PlayerOnlySignal extends RuntimeException {
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
     }
 }
