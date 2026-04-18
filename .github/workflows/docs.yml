@@ -70,7 +70,7 @@ jobs:
           cp -r core-testkit/build/docs/javadoc site/core-testkit
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
