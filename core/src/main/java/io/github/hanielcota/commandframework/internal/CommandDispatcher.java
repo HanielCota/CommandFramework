@@ -261,18 +261,22 @@ public final class CommandDispatcher {
                     this.logger.error("Unhandled exception in async command " + invocation.commandPath(), exception);
                     return;
                 }
-                try {
-                    this.resultEmitter.emit(actor, result);
-                } catch (Exception exception) {
-                    // Command body completed; only result emission failed (e.g. plugin disabled
-                    // mid-flight, message renderer threw). Log as warn to avoid flagging a
-                    // successful command as a runtime failure in operator dashboards.
-                    this.logger.warn("Failed to emit result for async command " + invocation.commandPath(), exception);
-                }
+                this.safelyEmit(actor, result, invocation);
             });
             return CommandResult.success();
         }
         return this.invokeMethod(actor, invocation);
+    }
+
+    private void safelyEmit(CommandActor actor, CommandResult result, PreparedInvocation invocation) {
+        try {
+            this.resultEmitter.emit(actor, result);
+        } catch (Exception exception) {
+            // Command body completed; only result emission failed (e.g. plugin disabled
+            // mid-flight, message renderer threw). Log as warn to avoid flagging a
+            // successful command as a runtime failure in operator dashboards.
+            this.logger.warn("Failed to emit result for async command " + invocation.commandPath(), exception);
+        }
     }
 
     private CommandResult invokeMethod(CommandActor actor, PreparedInvocation invocation) {
