@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`CommandDispatcher` split into four focused classes** - the dispatcher
+  (~355 lines) now delegates to `CommandSuggestionEngine` (tab-completion +
+  did-you-mean), `ArgumentPreparer` (argument parsing, sender binding, enum
+  resolver cache), and `CommandResultEmitter` (result rendering, help listing).
+  No behavioural change; each collaborator is now unit-testable in isolation.
+  Internal exception types (`MissingArgumentException`, `InvalidInputException`,
+  `TooManyArgumentsException`, `PlayerOnlySignal`) are now package-private
+  nested types of `ArgumentPreparer`. 13 new unit tests added across the three
+  collaborators.
+
 ## [0.2.1] - 2026-04-18
 
 ### Added

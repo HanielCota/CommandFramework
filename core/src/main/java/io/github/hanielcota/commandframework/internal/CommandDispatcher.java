@@ -18,16 +18,21 @@ import java.util.Set;
 import java.util.function.BiPredicate;
 
 /**
- * Pipeline orchestrator that dispatches a parsed command invocation through its stages:
- * permission check, player-only check, cooldown, argument parsing, confirmation and execution.
+ * Pipeline orchestrator for command dispatch. Delegates tab-completion to
+ * {@link CommandSuggestionEngine}, argument parsing and sender binding to
+ * {@link ArgumentPreparer}, and user-facing result rendering to
+ * {@link CommandResultEmitter}. The dispatcher itself owns only the
+ * orchestration: selector, middleware chain, preflight (permission / player-only)
+ * gate, cooldown coordination, confirmation routing, and async execution.
  *
- * <p>A single instance is shared by all commands registered in a framework. It holds no per-call
- * state - all request-scoped state lives in {@link CommandContext} arguments passed through the
- * pipeline.
+ * <p>A single instance is shared by all commands registered in a framework. It
+ * holds no per-call state - all request-scoped state lives in {@link CommandContext}
+ * arguments passed through the pipeline.
  *
- * <p><b>Thread-safety:</b> safe for concurrent use. Mutable collaborator state lives inside the
- * dispatcher's thread-safe managers (cooldown, rate limit, confirmation) and the platform-provided
- * {@link CommandMiddleware} chain; middlewares themselves must be thread-safe.
+ * <p><b>Thread-safety:</b> safe for concurrent use. Mutable collaborator state
+ * lives inside thread-safe managers (cooldown, rate limit, confirmation) and
+ * the platform-provided {@link CommandMiddleware} chain; middlewares themselves
+ * must be thread-safe.
  */
 public final class CommandDispatcher {
 
