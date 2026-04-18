@@ -60,6 +60,12 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
     private static final Pattern VALID_LABEL = Pattern.compile("[a-zA-Z0-9_-]+");
     private static final String GENERATED_PACKAGE = "io.github.hanielcota.commandframework.generated";
     private static final String DESCRIPTOR_INTERFACE = GENERATED_PACKAGE + ".CommandDescriptor";
+    /**
+     * Version stamped onto every generated {@link CommandDescriptor} class. Bump when a
+     * backwards-incompatible change is made to the generated shape so older runtimes can
+     * refuse to load descriptors they do not understand.
+     */
+    private static final int DESCRIPTOR_FORMAT_VERSION = 1;
     /** Mirrors {@link io.github.hanielcota.commandframework.annotation.Arg#maxLength()}. */
     private static final int DEFAULT_ARG_MAX_LENGTH = 256;
     private static final String JAVA_UTIL_OPTIONAL = "java.util.Optional";
@@ -310,6 +316,8 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 import java.util.List;
 
                 public final class %s implements CommandDescriptor {
+                    public static final int FORMAT_VERSION = %d;
+
                     private static final CommandDescriptor.Command COMMAND = %s;
 
                     @Override
@@ -339,6 +347,7 @@ public final class CommandFrameworkProcessor extends AbstractProcessor {
                 """.formatted(
                 GENERATED_PACKAGE,
                 descriptorName,
+                DESCRIPTOR_FORMAT_VERSION,
                 this.commandLiteral(type, command),
                 this.stringLiteral(packageName),
                 this.stringLiteral(commandClassName),

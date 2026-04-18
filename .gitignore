@@ -46,3 +46,10 @@ Thumbs.db
 # Agent tooling scratch (Claude Code / subagent metadata)
 .agents/
 skills-lock.json
+
+# Git worktrees for parallel feature branches
+.worktrees/
+
+# Session-scoped audits and implementation plans (agent scratch)
+docs/audits/
+docs/plans/

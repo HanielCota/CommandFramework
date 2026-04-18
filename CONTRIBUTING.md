@@ -99,3 +99,14 @@ Open a GitHub issue with:
 - Exact Paper or Velocity version.
 - A minimal reproducer.
 - Stack trace or unexpected behavior description.
+
+## Deprecation Policy
+
+Methods or types marked `@Deprecated` remain functional until the next minor version bump (e.g. `@Deprecated` in 0.3.x is removed no earlier than 0.4.0). Breaking removals in a patch release (0.x.y -> 0.x.(y+1)) are forbidden. Consumers should run with deprecation warnings enabled (`-Xlint:deprecation`) to spot removals in time.
+
+When deprecating something, prefer Javadoc with a concrete replacement:
+
+    /**
+     * @deprecated use {@link #betterMethod()} instead. Removed in 0.y.0.
+     */
+    @Deprecated(forRemoval = true, since = "0.x.y")

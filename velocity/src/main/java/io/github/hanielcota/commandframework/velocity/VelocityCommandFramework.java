@@ -67,6 +67,7 @@ public final class VelocityCommandFramework
         return this;
     }
 
+    // Safe: plugin.getClass() is bound together with its own instance, so the Class<Object> cast matches at runtime.
     @SuppressWarnings("unchecked")
     private void bindPluginInstance(Object plugin) {
         this.bind((Class<Object>) plugin.getClass(), plugin);

@@ -34,6 +34,7 @@ public final class PaperCommandFramework extends CommandFrameworkBuilder<Command
         return this;
     }
 
+    // Safe: plugin.getClass() is always a subclass of JavaPlugin, so the cast widens to Class<JavaPlugin>.
     @SuppressWarnings("unchecked")
     private void bindPluginInstance(JavaPlugin plugin) {
         this.bind((Class<JavaPlugin>) plugin.getClass(), plugin);

@@ -18,11 +18,11 @@ import net.kyori.adventure.text.format.NamedTextColor;
 public final class KickCommand {
 
     @Execute
-    @Description("Kick a player (with optional reason)")
+    @Description("Kick a player with a required reason")
     public void kick(
             @Sender CommandSource sender,
             Player target,
-            @Arg(greedy = true) @Optional("You have been kicked.") String reason
+            @Arg(greedy = true) String reason
     ) {
         target.disconnect(Component.text(reason, NamedTextColor.RED));
         sender.sendMessage(Component.text(

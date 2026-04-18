@@ -56,6 +56,7 @@ public final class DefaultArgumentResolvers {
         return Map.copyOf(resolvers);
     }
 
+    // Safe: callers pass a Class<? extends Enum>, so the cast to Class<E> recovers the enum's self-bounded type.
     @SuppressWarnings("unchecked")
     public static <E extends Enum<E>> ArgumentResolver<E> enumResolver(Class<?> enumType) {
         Class<E> typedClass = (Class<E>) enumType;

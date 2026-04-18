@@ -118,16 +118,16 @@ dependencyResolutionManagement {
 **`build.gradle.kts` (plugin Paper):**
 ```kotlin
 dependencies {
-    implementation("io.github.hanielcota.commandframework:paper:0.2.0")
-    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:paper:0.2.2")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.2")
 }
 ```
 
 **`build.gradle.kts` (plugin Velocity):**
 ```kotlin
 dependencies {
-    implementation("io.github.hanielcota.commandframework:velocity:0.2.0")
-    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.0")
+    implementation("io.github.hanielcota.commandframework:velocity:0.2.2")
+    annotationProcessor("io.github.hanielcota.commandframework:processor:0.2.2")
 }
 ```
 
@@ -144,12 +144,12 @@ annotation processor, toolchain Java 25) para você:
 ```kotlin
 plugins {
     java
-    id("io.github.hanielcota.commandframework") version "0.2.0"
+    id("io.github.hanielcota.commandframework") version "0.2.2"
 }
 
 commandframework {
     platform.set("paper")   // ou "velocity"
-    version.set("0.2.0")
+    version.set("0.2.2")
 }
 ```
 
@@ -167,12 +167,12 @@ commandframework {
     <dependency>
         <groupId>io.github.hanielcota.commandframework</groupId>
         <artifactId>paper</artifactId>
-        <version>0.2.0</version>
+        <version>0.2.2</version>
     </dependency>
     <dependency>
         <groupId>io.github.hanielcota.commandframework</groupId>
         <artifactId>processor</artifactId>
-        <version>0.2.0</version>
+        <version>0.2.2</version>
         <scope>provided</scope>
     </dependency>
 </dependencies>
@@ -597,7 +597,7 @@ Adicione o testkit ao seu `testImplementation` para testar comandos unitariament
 sem subir um servidor:
 
 ```kotlin
-testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.0")
+testImplementation("io.github.hanielcota.commandframework:core-testkit:0.2.2")
 ```
 
 ```java
@@ -856,7 +856,7 @@ quiser sugestões mais precisas.
 
 ### Template de prompt (copie e cole)
 
-> Você está escrevendo um plugin Paper 1.21+ usando **CommandFramework 0.2.0**
+> Você está escrevendo um plugin Paper 1.21+ usando **CommandFramework 0.2.2**
 > (https://github.com/HanielCota/CommandFramework). Sempre importe anotações de
 > `io.github.hanielcota.commandframework.annotation.*`. Use `@Command` em
 > classes, `@Execute` em métodos, `@Sender Player` como primeiro parâmetro.
