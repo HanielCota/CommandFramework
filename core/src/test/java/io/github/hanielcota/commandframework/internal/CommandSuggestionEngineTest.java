@@ -29,7 +29,9 @@ class CommandSuggestionEngineTest {
     @Test
     void suggestSwallowsExceptionsReturnsEmpty() {
         CommandDefinition command = singleArgRootCommand();
-        CommandSuggestionEngine engine = engine(Map.of("crash", command), CommandSuggestionEngineTest::throwingResolver);
+        CommandSuggestionEngine engine = engine(Map.of("crash", command), type -> {
+            throw new IllegalStateException("no resolver for " + type);
+        });
 
         List<String> suggestions = engine.suggest(mock(CommandActor.class), "crash", "a");
 
@@ -45,7 +47,7 @@ class CommandSuggestionEngineTest {
                 new CommandTokenizer(),
                 messages,
                 mock(FrameworkLogger.class),
-                CommandSuggestionEngineTest::allowAll,
+                (commandActor, executor) -> true,
                 CommandSuggestionEngineTest::unusedResolver
         );
         CommandActor actor = mock(CommandActor.class);
@@ -68,24 +70,13 @@ class CommandSuggestionEngineTest {
                 new CommandTokenizer(),
                 mock(MessageService.class),
                 mock(FrameworkLogger.class),
-                CommandSuggestionEngineTest::allowAll,
+                (actor, executor) -> true,
                 resolverLookup
         );
     }
 
-    private static boolean allowAll(CommandActor actor, ExecutorDefinition executor) {
-        java.util.Objects.requireNonNull(actor);
-        java.util.Objects.requireNonNull(executor);
-        return true;
-    }
-
     private static ArgumentResolver<Object> unusedResolver(Class<?> type) {
         throw new AssertionError("resolver lookup should not be invoked: " + type);
-    }
-
-    private static ArgumentResolver<Object> throwingResolver(Class<?> type) {
-        java.util.Objects.requireNonNull(type);
-        throw new IllegalStateException("boom");
     }
 
     private static CommandDefinition singleArgRootCommand() {
