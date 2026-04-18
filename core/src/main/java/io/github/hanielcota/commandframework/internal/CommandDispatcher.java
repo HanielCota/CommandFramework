@@ -34,7 +34,6 @@ public final class CommandDispatcher {
     private final PlatformBridge<?> bridge;
     private final Map<String, CommandDefinition> commandsByLabel;
     private final Set<String> confirmationCommands;
-    private final Map<Class<?>, ArgumentResolver<?>> resolvers;
     private final List<CommandMiddleware> middlewares;
     private final MessageService messages;
     private final CommandTokenizer tokenizer;
@@ -64,7 +63,6 @@ public final class CommandDispatcher {
         this.bridge = Objects.requireNonNull(bridge, "bridge");
         this.commandsByLabel = Map.copyOf(Objects.requireNonNull(commandsByLabel, "commandsByLabel"));
         this.confirmationCommands = Set.copyOf(Objects.requireNonNull(confirmationCommands, "confirmationCommands"));
-        this.resolvers = Map.copyOf(Objects.requireNonNull(resolvers, "resolvers"));
         this.middlewares = List.copyOf(Objects.requireNonNull(middlewares, "middlewares"));
         this.messages = Objects.requireNonNull(messages, "messages");
         this.tokenizer = Objects.requireNonNull(tokenizer, "tokenizer");
@@ -73,7 +71,9 @@ public final class CommandDispatcher {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.asyncExecutor = Objects.requireNonNull(asyncExecutor, "asyncExecutor");
         this.debug = debug;
-        this.argumentPreparer = new ArgumentPreparer(this.resolvers, this.bridge);
+        this.argumentPreparer = new ArgumentPreparer(
+                Map.copyOf(Objects.requireNonNull(resolvers, "resolvers")),
+                this.bridge);
         BiPredicate<CommandActor, ExecutorDefinition> permissionGate = this::allowed;
         this.resultEmitter = new CommandResultEmitter(this.messages, permissionGate);
         this.suggestionEngine = new CommandSuggestionEngine(
