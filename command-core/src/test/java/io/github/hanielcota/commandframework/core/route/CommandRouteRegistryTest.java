@@ -58,6 +58,21 @@ final class CommandRouteRegistryTest {
     }
 
     @Test
+    void rejectsRootThatCollidesWithExistingAlias() {
+        CommandRouteRegistry registry = new CommandRouteRegistry();
+        registry.register(route("kit", Set.of("loadout"), List.of()));
+
+        assertThrows(
+                RouteConfigurationException.class,
+                () -> registry.register(route("loadout", Set.of(), List.of()))
+        );
+
+        RouteResolution resolution = registry.resolve("loadout", List.of());
+        assertTrue(resolution.isFound());
+        assertEquals("kit", resolution.match().orElseThrow().route().canonicalPath());
+    }
+
+    @Test
     void doesNotKeepAliasesFromRejectedDuplicateRoute() {
         CommandRouteRegistry registry = new CommandRouteRegistry();
         registry.register(route("kit", Set.of(), List.of("give")));

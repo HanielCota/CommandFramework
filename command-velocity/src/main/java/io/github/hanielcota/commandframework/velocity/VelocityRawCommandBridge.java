@@ -25,9 +25,7 @@ final class VelocityRawCommandBridge implements RawCommand {
         dispatcher.dispatch(
                 actorFor(invocation.source()),
                 invocation.alias(),
-                invocation.arguments().isBlank()
-                        ? List.of()
-                        : List.of(invocation.arguments().split("\\s+")));
+                tokenize(invocation.arguments()));
     }
 
     @Override
@@ -35,9 +33,15 @@ final class VelocityRawCommandBridge implements RawCommand {
         return dispatcher.suggest(
                 actorFor(invocation.source()),
                 invocation.alias(),
-                invocation.arguments().isBlank()
-                        ? List.of()
-                        : List.of(invocation.arguments().split("\\s+")));
+                tokenize(invocation.arguments()));
+    }
+
+    static List<String> tokenize(String arguments) {
+        String normalized = Objects.requireNonNull(arguments, "arguments").trim();
+        if (normalized.isBlank()) {
+            return List.of();
+        }
+        return List.of(normalized.split("\\s+"));
     }
 
     private VelocityCommandActor actorFor(CommandSource source) {
