@@ -23,7 +23,7 @@ public final class CommandRouteRegistry implements RouteResolver {
     public synchronized void register(CommandRoute route) {
         CommandRoute checkedRoute = Objects.requireNonNull(route, "route");
         String normalizedRoot = normalizer.normalize(checkedRoute.root());
-        CommandRoot root = roots.computeIfAbsent(normalizedRoot, key -> createRoot(checkedRoute));
+        CommandRoot root = rootFor(checkedRoute, normalizedRoot);
         validateAliases(checkedRoute, root);
         CommandNode node = registerPath(checkedRoute, root.node());
         registerAliases(checkedRoute, root, normalizedRoot);
@@ -145,9 +145,26 @@ public final class CommandRouteRegistry implements RouteResolver {
         return Optional.ofNullable(aliasToRoot.get(normalizer.normalize(checkedLabel)));
     }
 
+    private CommandRoot rootFor(CommandRoute route, String normalizedRoot) {
+        CommandRoot existingRoot = roots.get(normalizedRoot);
+        if (existingRoot != null) {
+            return existingRoot;
+        }
+        CommandRoot existingAliasTarget = aliasToRoot.get(normalizedRoot);
+        if (existingAliasTarget != null) {
+            throw new RouteConfigurationException(
+                    "Invalid root '" + route.root() + "' for route '" + route.canonicalPath()
+                            + "': expected unused root label"
+            );
+        }
+        CommandRoot root = createRoot(route);
+        roots.put(normalizedRoot, root);
+        return root;
+    }
+
     private CommandRoot createRoot(CommandRoute route) {
         CommandRoot root = new CommandRoot(route.root(), Set.of(), new CommandNode(route.root()));
-        aliasToRoot.putIfAbsent(normalizer.normalize(route.root()), root);
+        aliasToRoot.put(normalizer.normalize(route.root()), root);
         return root;
     }
 

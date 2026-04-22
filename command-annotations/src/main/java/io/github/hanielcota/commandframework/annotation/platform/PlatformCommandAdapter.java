@@ -4,7 +4,9 @@ import io.github.hanielcota.commandframework.annotation.scan.AnnotatedCommandSca
 import io.github.hanielcota.commandframework.core.CommandDispatcher;
 import io.github.hanielcota.commandframework.core.CommandRoot;
 import io.github.hanielcota.commandframework.core.CommandRoute;
+import io.github.hanielcota.commandframework.core.route.CommandLiteralNormalizer;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,7 +19,8 @@ public abstract class PlatformCommandAdapter {
 
     private final CommandDispatcher dispatcher;
     private final AnnotatedCommandScanner scanner;
-    private final Set<CommandRoot> registeredRoots = ConcurrentHashMap.newKeySet();
+    private final CommandLiteralNormalizer normalizer = new CommandLiteralNormalizer();
+    private final Map<String, CommandRoot> registeredRoots = new ConcurrentHashMap<>();
     private final List<CommandRoute> registeredRoutes = new CopyOnWriteArrayList<>();
 
     protected PlatformCommandAdapter(CommandDispatcher dispatcher, AnnotatedCommandScanner scanner) {
@@ -48,14 +51,22 @@ public abstract class PlatformCommandAdapter {
 
     private void registerPlatformRoots() {
         for (CommandRoot root : dispatcher.roots()) {
-            if (!registeredRoots.contains(root)) {
-                try {
-                    registerRoot(root);
-                    registeredRoots.add(root);
-                } catch (RuntimeException exception) {
-                    dispatcher.logger().warn("Failed to register command root: " + root.label(), exception);
-                }
+            String label = normalizer.normalize(root.label());
+            CommandRoot previous = registeredRoots.putIfAbsent(label, root);
+            if (previous == null) {
+                registerPlatformRoot(label, root);
+            } else if (!previous.equals(root)) {
+                registeredRoots.replace(label, previous, root);
             }
+        }
+    }
+
+    private void registerPlatformRoot(String label, CommandRoot root) {
+        try {
+            registerRoot(root);
+        } catch (RuntimeException exception) {
+            registeredRoots.remove(label, root);
+            dispatcher.logger().warn("Failed to register command root: " + root.label(), exception);
         }
     }
 
@@ -64,7 +75,7 @@ public abstract class PlatformCommandAdapter {
             dispatcher.unregister(route);
         }
         registeredRoutes.clear();
-        for (CommandRoot root : registeredRoots) {
+        for (CommandRoot root : registeredRoots.values()) {
             unregisterRoot(root);
         }
         registeredRoots.clear();
@@ -79,6 +90,6 @@ public abstract class PlatformCommandAdapter {
     protected abstract void unregisterRoot(CommandRoot root);
 
     protected Set<CommandRoot> registeredRoots() {
-        return registeredRoots;
+        return Set.copyOf(registeredRoots.values());
     }
 }
