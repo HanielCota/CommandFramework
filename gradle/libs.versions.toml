@@ -9,7 +9,7 @@ pitest = "1.17.3"
 shadow = "9.3.2"
 sonarqube = "7.2.3.7755"
 spotless = "8.4.0"
-velocity = "3.4.0-SNAPSHOT"
+velocity = "3.5.0-SNAPSHOT"
 
 [libraries]
 bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
