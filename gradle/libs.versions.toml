@@ -1,6 +1,6 @@
 [versions]
 bucket4j = "8.14.0"
-caffeine = "3.1.8"
+caffeine = "3.2.3"
 jmh = "1.37"
 junit = "5.11.4"
 jspecify = "1.0.0"
