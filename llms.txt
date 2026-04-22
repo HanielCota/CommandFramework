@@ -1,0 +1,242 @@
+# CommandFramework
+
+> Lightweight, type-safe Java command framework for Minecraft server plugins.
+> It provides a platform-neutral command core plus adapters for Paper/Bukkit and
+> Velocity.
+
+This file is intended for LLMs, AI coding agents, and documentation tools that
+need a compact guide to understand and use this repository.
+
+## Repository
+
+- Repository: https://github.com/HanielCota/CommandFramework
+- Language: Java 21
+- Build tool: Gradle Kotlin DSL
+- License: MIT
+- Primary package: `io.github.hanielcota.commandframework`
+
+## What This Project Does
+
+CommandFramework lets plugin authors define commands as immutable routes or as
+annotated Java methods. It handles:
+
+- command registration and route resolution
+- permission and sender checks
+- cooldowns and dispatch throttling
+- parameter parsing and suggestions
+- annotation scanning
+- Paper/Bukkit and Velocity platform bridges
+- safe messages, input sanitization, and command metrics hooks
+
+## Module Map
+
+- `command-core`
+  - Core framework.
+  - Contains `CommandDispatcher`, `CommandRoute`, `CommandRouteRegistry`,
+    parameter parsing, cooldowns, throttling, suggestions, and usage formatting.
+
+- `command-annotations`
+  - Annotation API and scanner.
+  - Contains annotations such as `@Command`, `@Subcommand`, `@Default`,
+    `@Permission`, `@Cooldown`, `@OnlyPlayer`, `@OnlyConsole`, `@Async`,
+    `@Greedy`, and `@DefaultValue`.
+
+- `command-paper`
+  - Paper/Bukkit adapter.
+  - Main entry point: `PaperCommandFramework`.
+  - Bridges dispatcher calls to Paper commands and command actors.
+
+- `command-velocity`
+  - Velocity adapter.
+  - Main entry point: `VelocityCommandFramework`.
+  - Bridges dispatcher calls to Velocity command sources.
+
+- `examples`
+  - Example plugin usage for Paper and Velocity.
+
+- `benchmarks`
+  - JMH benchmarks for dispatch behavior.
+
+## Important Files
+
+- `README.md`: human-facing overview, installation, and quick start.
+- `build.gradle.kts`: shared build configuration and publishing setup.
+- `settings.gradle.kts`: Gradle modules and plugin repositories.
+- `gradle/libs.versions.toml`: dependency and plugin versions.
+- `.github/workflows/build.yml`: CI build.
+- `.github/workflows/codeql.yml`: CodeQL analysis.
+- `.github/workflows/javadoc.yml`: Javadoc publishing.
+- `.github/dependabot.yml`: grouped dependency update configuration.
+
+## Build And Test
+
+Use these commands from the repository root:
+
+```bash
+./gradlew build
+./gradlew test
+./gradlew spotlessApply
+```
+
+Before proposing code changes, run:
+
+```bash
+./gradlew build
+```
+
+## Installation
+
+The project is intended to be consumed through JitPack.
+
+Add repositories:
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven("https://jitpack.io")
+    maven("https://repo.papermc.io/repository/maven-public/")
+}
+```
+
+Add the module needed by the plugin:
+
+```kotlin
+dependencies {
+    implementation("com.github.HanielCota.CommandFramework:command-paper:<tag>")
+    implementation("com.github.HanielCota.CommandFramework:command-velocity:<tag>")
+}
+```
+
+For snapshots from the main branch, use `main-SNAPSHOT`.
+For releases, use a Git tag such as `v0.3.0`.
+
+## Basic Paper Usage
+
+```java
+public final class MyPlugin extends JavaPlugin {
+    private PaperCommandFramework commands;
+
+    @Override
+    public void onEnable() {
+        commands = PaperCommandFramework.builder(this).build();
+        commands.registerAnnotated(new KitCommands());
+    }
+
+    @Override
+    public void onDisable() {
+        if (commands != null) {
+            commands.shutdown();
+        }
+    }
+}
+```
+
+```java
+@Command("kit")
+public final class KitCommands {
+
+    @Default
+    @OnlyPlayer
+    public void defaultKit(CommandActor actor) {
+        actor.sendMessage("Use /kit give <player>");
+    }
+
+    @Subcommand("give")
+    @Permission("kit.give")
+    @Cooldown(value = 3, unit = TimeUnit.SECONDS)
+    public void give(CommandActor actor, String target) {
+        actor.sendMessage("Kit sent to " + target);
+    }
+}
+```
+
+## Basic Velocity Usage
+
+```java
+@Plugin(id = "my-plugin", name = "My Plugin", version = "1.0.0")
+public final class MyVelocityPlugin {
+    private final VelocityCommandFramework<MyVelocityPlugin> commands;
+
+    @Inject
+    public MyVelocityPlugin(ProxyServer server) {
+        this.commands = VelocityCommandFramework.builder(server, this).build();
+        commands.registerAnnotated(new KitCommands());
+    }
+}
+```
+
+## Route API Usage
+
+Use `CommandRoute.builder(...)` when commands should be registered without
+annotations:
+
+```java
+CommandRoute route = CommandRoute.builder("kit", (context, parameters) -> {
+    context.actor().sendMessage("Kit command executed");
+    return CommandResult.success();
+}).build();
+
+CommandDispatcher dispatcher = CommandDispatcher.builder().build();
+dispatcher.register(route);
+```
+
+## Parameter Rules
+
+- `CommandActor` parameters are injected and do not consume user input.
+- `String[]` consumes all remaining raw arguments and must be the final method
+  parameter.
+- `@Greedy String` consumes all remaining arguments and must be the final
+  consuming parameter.
+- `@DefaultValue` wraps a resolver and supplies a value when the user omits the
+  argument.
+- Enums are supported automatically by `ParameterResolverRegistry`.
+- Custom resolvers can be registered with:
+
+```java
+builder.argumentResolver(myArgumentResolver);
+builder.resolver(myParameterResolver);
+```
+
+## Threading Notes
+
+- `CommandDispatcher` is safe for runtime dispatch and suggestion reads.
+- Register routes during plugin startup when possible.
+- `@Async` runs the whole dispatch pipeline on the configured async executor.
+- On Paper/Bukkit, most API calls must run on the server main thread. The Paper
+  actor schedules `sendMessage` safely when it has a plugin reference, but plugin
+  code must schedule other Bukkit API work itself.
+
+## Design Constraints For AI Agents
+
+When modifying this repository:
+
+- Preserve the module boundaries: core must not depend on Paper or Velocity.
+- Keep platform adapters thin; shared behavior belongs in `command-core`.
+- Add regression tests for route resolution, parsing, or adapter behavior when
+  changing command dispatch semantics.
+- Do not bypass `CommandRouteValidator`, `StartupRouteValidator`, or sanitizer
+  checks.
+- Keep public APIs source-compatible unless the change is explicitly breaking.
+- Prefer immutable route/context/result objects.
+- Run `./gradlew build` before finalizing changes.
+
+## Common Extension Points
+
+- `CommandInterceptor`: wrap command execution with before/after hooks.
+- `CommandMessageProvider`: customize framework messages.
+- `CommandLogger`: integrate framework logging.
+- `CommandMetrics`: integrate metrics.
+- `ArgumentResolver<T>`: parse one command token into a Java value.
+- `ParameterResolver<T>`: resolve advanced parameters from the full parse
+  context.
+
+## Known Operational Notes
+
+- Paper Brigadier unregistration is limited by Paper's public API; deactivated
+  handlers become no-ops, but commands may remain in the Brigadier tree until
+  restart.
+- Bukkit command unregistration uses reflection against `SimpleCommandMap`.
+- Velocity raw command input is normalized before tokenization.
+- Root command labels and aliases are normalized for registration and conflict
+  checks.
+
