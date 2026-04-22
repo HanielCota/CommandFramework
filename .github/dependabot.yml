@@ -4,6 +4,10 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      gradle-dependencies:
+        patterns:
+          - "*"
     open-pull-requests-limit: 10
     ignore:
       - dependency-name: "com.velocitypowered:velocity-api"
@@ -13,3 +17,7 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - "*"

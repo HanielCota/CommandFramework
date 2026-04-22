@@ -1,15 +1,15 @@
 [versions]
-bucket4j = "8.14.0"
-caffeine = "3.1.8"
+bucket4j = "8.18.0"
+caffeine = "3.2.3"
 jmh = "1.37"
-junit = "5.11.4"
+junit = "6.0.3"
 jspecify = "1.0.0"
-paper = "1.21.4-R0.1-SNAPSHOT"
-pitest = "1.17.3"
-shadow = "9.3.2"
+paper = "1.21.11-R0.1-SNAPSHOT"
+pitest = "1.23.1"
+shadow = "9.4.1"
 sonarqube = "7.2.3.7755"
 spotless = "8.4.0"
-velocity = "3.4.0-SNAPSHOT"
+velocity = "3.5.0-SNAPSHOT"
 
 [libraries]
 bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
@@ -26,7 +26,7 @@ velocity-api = { module = "com.velocitypowered:velocity-api", version.ref = "vel
 
 [plugins]
 jmh = { id = "me.champeau.jmh", version = "0.7.3" }
-pitest = { id = "info.solidsoft.pitest", version = "1.15.2" }
+pitest = { id = "info.solidsoft.pitest", version = "1.19.0" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 sonarqube = { id = "org.sonarqube", version.ref = "sonarqube" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
