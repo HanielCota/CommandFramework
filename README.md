@@ -24,6 +24,38 @@ A lightweight, type-safe command framework for Minecraft server plugins, support
 | `examples` | Sample plugins for Paper and Velocity |
 | `benchmarks` | JMH benchmarks |
 
+## Installation (JitPack)
+
+[![](https://jitpack.io/v/HanielCota/CommandFramework.svg)](https://jitpack.io/#HanielCota/CommandFramework)
+
+Add the JitPack repository to your `build.gradle.kts`:
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven("https://jitpack.io")
+    maven("https://repo.papermc.io/repository/maven-public/")
+}
+```
+
+Add the dependencies you need:
+
+```kotlin
+dependencies {
+    // Paper plugin
+    implementation("com.github.HanielCota.CommandFramework:command-paper:main-SNAPSHOT")
+    
+    // Velocity plugin
+    implementation("com.github.HanielCota.CommandFramework:command-velocity:main-SNAPSHOT")
+    
+    // Or individual modules
+    implementation("com.github.HanielCota.CommandFramework:command-core:main-SNAPSHOT")
+    implementation("com.github.HanielCota.CommandFramework:command-annotations:main-SNAPSHOT")
+}
+```
+
+For a specific release, replace `main-SNAPSHOT` with a tag (e.g. `v1.0.0`).
+
 ## Requirements
 
 - **Java**: 21+
