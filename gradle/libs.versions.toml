@@ -2,7 +2,7 @@
 bucket4j = "8.14.0"
 caffeine = "3.1.8"
 jmh = "1.37"
-junit = "5.11.4"
+junit = "6.0.3"
 jspecify = "1.0.0"
 paper = "1.21.4-R0.1-SNAPSHOT"
 pitest = "1.17.3"
