@@ -1,5 +1,5 @@
 [versions]
-bucket4j = "8.14.0"
+bucket4j = "8.18.0"
 caffeine = "3.1.8"
 jmh = "1.37"
 junit = "5.11.4"
