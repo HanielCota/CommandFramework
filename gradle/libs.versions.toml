@@ -26,7 +26,7 @@ velocity-api = { module = "com.velocitypowered:velocity-api", version.ref = "vel
 
 [plugins]
 jmh = { id = "me.champeau.jmh", version = "0.7.3" }
-pitest = { id = "info.solidsoft.pitest", version = "1.15.2" }
+pitest = { id = "info.solidsoft.pitest", version = "1.19.0" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 sonarqube = { id = "org.sonarqube", version.ref = "sonarqube" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
