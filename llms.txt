@@ -60,6 +60,7 @@ annotated Java methods. It handles:
 ## Important Files
 
 - `README.md`: human-facing overview, installation, and quick start.
+- `CHANGELOG.md`: release history and user-facing changes.
 - `build.gradle.kts`: shared build configuration and publishing setup.
 - `settings.gradle.kts`: Gradle modules and plugin repositories.
 - `gradle/libs.versions.toml`: dependency and plugin versions.
@@ -108,7 +109,7 @@ dependencies {
 ```
 
 For snapshots from the main branch, use `main-SNAPSHOT`.
-For releases, use a Git tag such as `v0.3.0`.
+For releases, use a Git tag such as `v0.3.1`.
 
 ## Basic Paper Usage
 

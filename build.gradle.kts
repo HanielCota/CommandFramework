@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "io.github.hanielcota.commandframework"
-version = "0.1.0-SNAPSHOT"
+version = "0.3.1"
 
 val platformProjects = setOf("command-paper", "command-velocity")
 

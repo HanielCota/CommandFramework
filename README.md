@@ -1,5 +1,10 @@
 # CommandFramework
 
+[![Build](https://github.com/HanielCota/CommandFramework/actions/workflows/build.yml/badge.svg)](https://github.com/HanielCota/CommandFramework/actions/workflows/build.yml)
+[![CodeQL](https://github.com/HanielCota/CommandFramework/actions/workflows/codeql.yml/badge.svg)](https://github.com/HanielCota/CommandFramework/actions/workflows/codeql.yml)
+[![Javadoc](https://github.com/HanielCota/CommandFramework/actions/workflows/javadoc.yml/badge.svg)](https://github.com/HanielCota/CommandFramework/actions/workflows/javadoc.yml)
+[![JitPack](https://jitpack.io/v/HanielCota/CommandFramework.svg)](https://jitpack.io/#HanielCota/CommandFramework)
+
 A lightweight, type-safe command framework for Minecraft server plugins, supporting both **Paper** (Bukkit) and **Velocity** proxy platforms.
 
 ## Features
@@ -26,8 +31,6 @@ A lightweight, type-safe command framework for Minecraft server plugins, support
 
 ## Installation (JitPack)
 
-[![](https://jitpack.io/v/HanielCota/CommandFramework.svg)](https://jitpack.io/#HanielCota/CommandFramework)
-
 Add the JitPack repository to your `build.gradle.kts`:
 
 ```kotlin
@@ -43,24 +46,24 @@ Add the dependencies you need:
 ```kotlin
 dependencies {
     // Paper plugin
-    implementation("com.github.HanielCota.CommandFramework:command-paper:main-SNAPSHOT")
+    implementation("com.github.HanielCota.CommandFramework:command-paper:v0.3.1")
     
     // Velocity plugin
-    implementation("com.github.HanielCota.CommandFramework:command-velocity:main-SNAPSHOT")
+    implementation("com.github.HanielCota.CommandFramework:command-velocity:v0.3.1")
     
     // Or individual modules
-    implementation("com.github.HanielCota.CommandFramework:command-core:main-SNAPSHOT")
-    implementation("com.github.HanielCota.CommandFramework:command-annotations:main-SNAPSHOT")
+    implementation("com.github.HanielCota.CommandFramework:command-core:v0.3.1")
+    implementation("com.github.HanielCota.CommandFramework:command-annotations:v0.3.1")
 }
 ```
 
-For a specific release, replace `main-SNAPSHOT` with a tag (e.g. `v1.0.0`).
+For snapshots from `main`, replace `v0.3.1` with `main-SNAPSHOT`.
 
 ## Requirements
 
 - **Java**: 21+
-- **Paper API**: 1.21.4+
-- **Velocity API**: 3.4.0+
+- **Paper API**: 1.21.11+
+- **Velocity API**: 3.5.0-SNAPSHOT+
 
 ## Quick Start
 
@@ -124,6 +127,12 @@ public class MyVelocityPlugin {
 ```bash
 ./gradlew build
 ```
+
+## Documentation
+
+- [LLM usage guide](llms.txt)
+- [Changelog](CHANGELOG.md)
+- [Javadoc](https://hanielcota.github.io/CommandFramework/)
 
 ## License
 
