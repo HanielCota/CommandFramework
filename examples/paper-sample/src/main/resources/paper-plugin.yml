@@ -1,8 +1,0 @@
-name: PaperSample
-version: '${version}'
-main: com.example.paperdemo.PaperSamplePlugin
-api-version: '1.21'
-description: CommandFramework paper-sample demonstrating heal/economy-style commands.
-authors:
-  - HanielCota
-# No `commands:` section - CommandFramework registers through Paper's Brigadier lifecycle.

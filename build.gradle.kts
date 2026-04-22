@@ -1,163 +1,138 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import net.ltgt.gradle.errorprone.errorprone
-import org.gradle.api.artifacts.VersionCatalogsExtension
 
 plugins {
     base
     alias(libs.plugins.shadow) apply false
-    id("net.ltgt.errorprone") version "5.1.0" apply false
+    alias(libs.plugins.sonarqube)
+    alias(libs.plugins.spotless)
+    alias(libs.plugins.jmh) apply false
 }
 
-val sharedLibs = extensions.getByType<VersionCatalogsExtension>().named("libs")
-
 group = "io.github.hanielcota.commandframework"
-version = (findProperty("version") as String?)
-    ?.takeIf { it.isNotBlank() && it != "unspecified" }
-    ?: "0.1.0-SNAPSHOT"
+version = "0.1.0-SNAPSHOT"
+
+val platformProjects = setOf("command-paper", "command-velocity")
+
+sonar {
+    properties {
+        property("sonar.projectKey", "CommandFramework")
+        property("sonar.projectName", "CommandFramework")
+        property("sonar.projectVersion", project.version.toString())
+        property("sonar.gradle.scanAll", "true")
+        property("sonar.sourceEncoding", "UTF-8")
+        property("sonar.exclusions", "**/build/**,**/.gradle/**")
+    }
+}
+
+tasks.named("sonar") {
+    dependsOn(tasks.named("build"))
+}
+
+spotless {
+    format("gradle") {
+        target("*.gradle.kts", "*/build.gradle.kts", "gradle/**/*.toml", "gradle.properties", ".editorconfig", ".gitignore")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
 
 subprojects {
     group = rootProject.group
     version = rootProject.version
 
     apply(plugin = "java-library")
-    apply(plugin = "maven-publish")
-    apply(plugin = "checkstyle")
-    apply(plugin = "pmd")
-    apply(plugin = "net.ltgt.errorprone")
+    apply(plugin = "com.diffplug.spotless")
 
     dependencies {
-        "errorprone"(sharedLibs.findLibrary("errorprone-core").get())
+        val libsCatalog = rootProject.extensions
+            .getByType<org.gradle.api.artifacts.VersionCatalogsExtension>()
+            .named("libs")
+        add("compileOnly", libsCatalog.findLibrary("jspecify").get())
     }
 
     extensions.configure<JavaPluginExtension>("java") {
-        toolchain.languageVersion.set(JavaLanguageVersion.of(25))
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
-        withJavadocJar()
+        toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
         withSourcesJar()
+        withJavadocJar()
     }
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
-        // NOTE: Shadow 8.3.6 could not process Java 25 bytecode in this environment, so the build uses
-        // Shadow 9.3.2 instead to preserve Java 25 output and required relocations.
-        options.release.set(25)
+        options.release.set(21)
         options.compilerArgs.add("-parameters")
-        options.errorprone {
-            disableWarningsInGeneratedCode.set(true)
-        }
     }
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
     }
 
-    tasks.withType<Jar>().configureEach {
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    tasks.withType<Javadoc>().configureEach {
+        (options as org.gradle.external.javadoc.StandardJavadocDocletOptions)
+            .addStringOption("Xdoclint:all,-missing", "-quiet")
     }
 
-    extensions.configure<CheckstyleExtension>("checkstyle") {
-        toolVersion = sharedLibs.findVersion("checkstyle").get().requiredVersion
-        configFile = rootProject.file("config/checkstyle/checkstyle.xml")
-        isIgnoreFailures = true
-        isShowViolations = false
+    val pitestConfiguration = configurations.maybeCreate("pitest")
+    dependencies.add("pitest", "org.pitest:pitest-command-line:${rootProject.libs.versions.pitest.get()}")
+    dependencies.add("pitest", "org.pitest:pitest-junit5-plugin:1.2.1")
+
+    tasks.register<JavaExec>("pitest") {
+        group = "verification"
+        description = "Runs mutation testing with PIT"
+        val sourceSets = project.extensions.getByType<org.gradle.api.tasks.SourceSetContainer>()
+        classpath = pitestConfiguration + sourceSets["test"].runtimeClasspath + sourceSets["main"].output + sourceSets["test"].output
+        mainClass.set("org.pitest.mutationtest.commandline.MutationCoverageReport")
+        args = listOf(
+            "--reportDir", layout.buildDirectory.dir("reports/pitest").get().asFile.absolutePath,
+            "--targetClasses", "io.github.hanielcota.commandframework.${project.name.replace("-", ".").replace("command.", "")}.*",
+            "--targetTests", "io.github.hanielcota.commandframework.${project.name.replace("-", ".").replace("command.", "")}.*",
+            "--sourceDirs", sourceSets["main"].allSource.srcDirs.joinToString(","),
+            "--outputFormats", "HTML,XML",
+            "--timestampedReports", "false"
+        )
     }
 
-    extensions.configure<PmdExtension>("pmd") {
-        toolVersion = sharedLibs.findVersion("pmd").get().requiredVersion
-        isConsoleOutput = false
-        isIgnoreFailures = true
-        ruleSets = emptyList()
-        ruleSetFiles = rootProject.files("config/pmd/ruleset.xml")
-    }
-
-    tasks.withType<Checkstyle>().configureEach {
-        reports {
-            html.required.set(true)
-            xml.required.set(true)
+    extensions.configure<com.diffplug.gradle.spotless.SpotlessExtension>("spotless") {
+        java {
+            target("src/**/*.java")
+            importOrder()
+            trimTrailingWhitespace()
+            endWithNewline()
         }
     }
+}
 
-    tasks.withType<Pmd>().configureEach {
-        reports {
-            html.required.set(true)
-            xml.required.set(true)
-        }
+configure(subprojects.filter { it.name in platformProjects }) {
+    apply(plugin = "com.gradleup.shadow")
+
+    tasks.named<Jar>("jar") {
+        archiveClassifier.set("thin")
     }
+
+    tasks.named<ShadowJar>("shadowJar") {
+        archiveClassifier.set("")
+        relocate("io.github.bucket4j", "io.github.hanielcota.commandframework.libs.bucket4j")
+        relocate("com.github.benmanes.caffeine", "io.github.hanielcota.commandframework.libs.caffeine")
+        relocate("com.google.errorprone", "io.github.hanielcota.commandframework.libs.errorprone")
+        minimize()
+        mergeServiceFiles()
+    }
+
+    tasks.named("assemble") {
+        dependsOn(tasks.named("shadowJar"))
+    }
+
+    apply(plugin = "maven-publish")
 
     extensions.configure<PublishingExtension>("publishing") {
         publications {
             create<MavenPublication>("maven") {
                 from(components["java"])
-                pom {
-                    name.set("CommandFramework ${project.name}")
-                    description.set(
-                        "Annotation-based command framework for Paper and Velocity " +
-                                "with a shared core, zero YAML registration, automatic parsing, " +
-                                "permissions, cooldowns, confirmations, help, and tab-complete."
-                    )
-                    url.set("https://github.com/HanielCota/CommandFramework")
-                    licenses {
-                        license {
-                            name.set("MIT License")
-                            url.set("https://opensource.org/licenses/MIT")
-                        }
-                    }
-                    developers {
-                        developer {
-                            id.set("HanielCota")
-                            name.set("Haniel Cota")
-                        }
-                    }
-                    scm {
-                        connection.set("scm:git:git://github.com/HanielCota/CommandFramework.git")
-                        developerConnection.set("scm:git:ssh://github.com:HanielCota/CommandFramework.git")
-                        url.set("https://github.com/HanielCota/CommandFramework")
-                    }
-                }
+                groupId = rootProject.group.toString()
+                artifactId = project.name
+                version = rootProject.version.toString()
             }
         }
-        repositories {
-            maven {
-                name = "GitHubPackages"
-                url = uri("https://maven.pkg.github.com/HanielCota/CommandFramework")
-                credentials {
-                    username = System.getenv("GITHUB_ACTOR")
-                    password = System.getenv("GITHUB_TOKEN")
-                }
-            }
-        }
-    }
-}
-
-project(":paper") {
-    apply(plugin = "com.gradleup.shadow")
-
-    tasks.named<ShadowJar>("shadowJar") {
-        archiveClassifier.set("")
-        relocate(
-            "com.github.benmanes.caffeine",
-            "io.github.hanielcota.commandframework.libs.caffeine"
-        )
-    }
-
-    tasks.named("build") {
-        dependsOn("shadowJar")
-    }
-}
-
-project(":velocity") {
-    apply(plugin = "com.gradleup.shadow")
-
-    tasks.named<ShadowJar>("shadowJar") {
-        archiveClassifier.set("")
-        relocate(
-            "com.github.benmanes.caffeine",
-            "io.github.hanielcota.commandframework.libs.caffeine"
-        )
-    }
-
-    tasks.named("build") {
-        dependsOn("shadowJar")
     }
 }

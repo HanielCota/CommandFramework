@@ -1,55 +1,14 @@
-# Gradle
 .gradle/
-build/
-!**/src/**/build/
-out/
-
-# IntelliJ IDEA
 .idea/
-*.iml
-*.ipr
-*.iws
-
-# IntelliJ inspection exports dropped at project root
-# (Annotator.xml, unused.xml, VulnerableLibrariesLocal.xml, etc.)
-/*.xml
-/.xml
-/.descriptions.xml
-
-# Eclipse
-.project
-.classpath
-.settings/
-bin/
-
-# VS Code
 .vscode/
 
-# Claude Code CLI
-.claude/
+build/
+out/
+target/
 
-# IntelliJ inspection-export artifacts (also dropped at root)
-/script.js
-/styles.css
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
+*.class
+*.iml
 *.log
 
-# Local environment
-.env
-.env.local
-
-# Agent tooling scratch (Claude Code / subagent metadata)
-.agents/
-skills-lock.json
-
-# Git worktrees for parallel feature branches
-.worktrees/
-
-# Session-scoped audits and implementation plans (agent scratch)
-docs/audits/
-docs/plans/
+hs_err_pid*
+replay_pid*

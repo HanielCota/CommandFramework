@@ -1,27 +1,32 @@
 [versions]
-paper = "26.1.2.build.12-alpha"
-velocity = "3.4.0-SNAPSHOT"
-adventure = "4.26.1"
-caffeine = "3.2.3"
+bucket4j = "8.14.0"
+caffeine = "3.1.8"
+jmh = "1.37"
 junit = "5.11.4"
-mockito = "5.23.0"
+jspecify = "1.0.0"
+paper = "1.21.4-R0.1-SNAPSHOT"
+pitest = "1.17.3"
 shadow = "9.3.2"
-errorprone = "2.43.0"
-checkstyle = "10.20.2"
-pmd = "7.10.0"
+sonarqube = "7.2.3.7755"
+spotless = "8.4.0"
+velocity = "3.4.0-SNAPSHOT"
 
 [libraries]
-paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
-velocity-api = { module = "com.velocitypowered:velocity-api", version.ref = "velocity" }
-adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" }
-adventure-text-minimessage = { module = "net.kyori:adventure-text-minimessage", version.ref = "adventure" }
+bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
+jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
-junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
-mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
-mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
-errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorprone" }
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
+paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+pitest = { module = "org.pitest:pitest", version.ref = "pitest" }
+velocity-api = { module = "com.velocitypowered:velocity-api", version.ref = "velocity" }
 
 [plugins]
+jmh = { id = "me.champeau.jmh", version = "0.7.3" }
+pitest = { id = "info.solidsoft.pitest", version = "1.15.2" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+sonarqube = { id = "org.sonarqube", version.ref = "sonarqube" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

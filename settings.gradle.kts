@@ -6,6 +6,10 @@ pluginManagement {
     }
 }
 
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.9.0"
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -16,4 +20,11 @@ dependencyResolutionManagement {
 
 rootProject.name = "CommandFramework"
 
-include("annotations", "core", "paper", "velocity", "core-testkit", "processor", "gradle-plugin")
+include(
+    "benchmarks",
+    "command-annotations",
+    "command-core",
+    "command-paper",
+    "command-velocity",
+    "examples",
+)
