@@ -122,7 +122,9 @@ configure(subprojects.filter { it.name in platformProjects }) {
     tasks.named("assemble") {
         dependsOn(tasks.named("shadowJar"))
     }
+}
 
+configure(subprojects) {
     apply(plugin = "maven-publish")
 
     extensions.configure<PublishingExtension>("publishing") {
