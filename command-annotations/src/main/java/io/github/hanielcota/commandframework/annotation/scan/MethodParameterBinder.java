@@ -41,8 +41,8 @@ record MethodParameterBinder(ParameterResolverRegistry resolvers) {
 
     private <T> ParameterResolver<T> resolver(Method method, Parameter parameter, Class<T> type) {
         ParameterResolver<T> base = resolvers.find(type).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid parameter type '" + type.getName() + "' in method '" + method.getName()
-                        + "': expected registered ParameterResolver"
+                "Invalid parameter type '" + type.getName() + "' in method '" + method.getDeclaringClass().getSimpleName() + "." + method.getName()
+                        + "': expected registered ParameterResolver or CommandActor as first parameter"
         ));
         if (parameter.isAnnotationPresent(Greedy.class) && type == String.class) {
             @SuppressWarnings("unchecked")

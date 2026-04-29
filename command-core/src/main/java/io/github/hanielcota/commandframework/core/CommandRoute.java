@@ -127,9 +127,9 @@ public final class CommandRoute {
 
         private final String root;
         private final CommandExecutor executor;
-        private final Set<String> aliases = new LinkedHashSet<>();
-        private final List<String> path = new ArrayList<>();
-        private final List<CommandParameter<?>> parameters = new ArrayList<>();
+        private Set<String> aliases = new LinkedHashSet<>();
+        private List<String> path = new ArrayList<>();
+        private List<CommandParameter<?>> parameters = new ArrayList<>();
         private String permission = "";
         private SenderRequirement senderRequirement = SenderRequirement.ANY;
         private Duration cooldown = Duration.ZERO;
@@ -145,15 +145,13 @@ public final class CommandRoute {
 
         public Builder aliases(Set<String> aliases) {
             Objects.requireNonNull(aliases, "aliases");
-            this.aliases.clear();
-            this.aliases.addAll(aliases);
+            this.aliases = new LinkedHashSet<>(aliases);
             return this;
         }
 
         public Builder path(List<String> path) {
             Objects.requireNonNull(path, "path");
-            this.path.clear();
-            this.path.addAll(path);
+            this.path = new ArrayList<>(path);
             return this;
         }
 
@@ -178,8 +176,7 @@ public final class CommandRoute {
 
         public Builder parameters(List<CommandParameter<?>> parameters) {
             Objects.requireNonNull(parameters, "parameters");
-            this.parameters.clear();
-            this.parameters.addAll(parameters);
+            this.parameters = new ArrayList<>(parameters);
             return this;
         }
 

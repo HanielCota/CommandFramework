@@ -2,14 +2,14 @@
 bucket4j = "8.18.0"
 caffeine = "3.2.3"
 jmh = "1.37"
-junit = "6.0.3"
+junit = "5.10.3"
 jspecify = "1.0.0"
-paper = "1.21.11-R0.1-SNAPSHOT"
+paper = "1.21.4-R0.1-SNAPSHOT"
 pitest = "1.23.1"
 shadow = "9.4.1"
 sonarqube = "7.2.3.7755"
 spotless = "8.4.0"
-velocity = "3.5.0-SNAPSHOT"
+velocity = "3.4.0"
 
 [libraries]
 bucket4j-core = { module = "com.bucket4j:bucket4j_jdk17-core", version.ref = "bucket4j" }

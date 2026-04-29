@@ -13,9 +13,14 @@ public final class PaperPluginExample extends JavaPlugin {
         try {
             commands = PaperCommandFramework.builder(this)
                     .messageProvider(new CustomMessageProvider())
+                    .interceptor(new AdminCommand.AdminInterceptor())
                     .build();
+
             commands.registerAnnotated(new KitCommand());
-            getLogger().info("Comandos registrados com sucesso.");
+            commands.registerAnnotated(new AdminCommand());
+            commands.registerAnnotated(new DebugCommand(commands.dispatcher()));
+
+            getLogger().info("Comandos registrados com sucesso!");
         } catch (Exception exception) {
             getLogger().log(Level.SEVERE, "Falha ao registrar comandos", exception);
             getServer().getPluginManager().disablePlugin(this);

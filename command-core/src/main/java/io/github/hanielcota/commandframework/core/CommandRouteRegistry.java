@@ -57,6 +57,10 @@ public final class CommandRouteRegistry implements RouteResolver {
             return;
         }
         Set<String> remainingAliases = collectRemainingAliases();
+        Set<String> normalizedRemaining = new LinkedHashSet<>();
+        for (String alias : remainingAliases) {
+            normalizedRemaining.add(normalizer.normalize(alias));
+        }
         String normalizedRoot = normalizer.normalize(route.root());
         CommandRoot root = roots.get(normalizedRoot);
         if (root == null) {
@@ -64,13 +68,13 @@ public final class CommandRouteRegistry implements RouteResolver {
         }
         for (String alias : removedAliases) {
             String normalized = normalizer.normalize(alias);
-            if (!remainingAliases.contains(alias)) {
+            if (!normalizedRemaining.contains(normalized)) {
                 aliasToRoot.remove(normalized);
             }
         }
         Set<String> kept = new LinkedHashSet<>();
         for (String alias : root.aliases()) {
-            if (remainingAliases.contains(alias)) {
+            if (normalizedRemaining.contains(normalizer.normalize(alias))) {
                 kept.add(alias);
             }
         }

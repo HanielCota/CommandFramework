@@ -6,7 +6,6 @@ import java.lang.reflect.Field;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.SimpleCommandMap;
@@ -22,8 +21,6 @@ import org.bukkit.plugin.java.JavaPlugin;
  * reconnect.</p>
  */
 final class BukkitPaperCommandRegistrar implements PaperCommandRegistrar {
-
-    private static final Logger LOG = Logger.getLogger(BukkitPaperCommandRegistrar.class.getName());
 
     @Override
     public void register(JavaPlugin plugin, CommandRoot root, CommandDispatcher dispatcher) {
@@ -44,10 +41,16 @@ final class BukkitPaperCommandRegistrar implements PaperCommandRegistrar {
         Objects.requireNonNull(dispatcher, "dispatcher");
         try {
             SimpleCommandMap commandMap = (SimpleCommandMap) Bukkit.getCommandMap();
+            if (commandMap == null) {
+                throw new CommandUnregisterException("Command map not available");
+            }
             Field knownCommandsField = SimpleCommandMap.class.getDeclaredField("knownCommands");
             knownCommandsField.setAccessible(true);
             @SuppressWarnings("unchecked")
             Map<String, Command> knownCommands = (Map<String, Command>) knownCommandsField.get(commandMap);
+            if (knownCommands == null) {
+                throw new CommandUnregisterException("Known commands map is null");
+            }
             knownCommands.remove(root.label());
             knownCommands.remove(plugin.getName().toLowerCase(Locale.ROOT) + ":" + root.label());
             for (String alias : root.aliases()) {
@@ -55,7 +58,7 @@ final class BukkitPaperCommandRegistrar implements PaperCommandRegistrar {
                 knownCommands.remove(plugin.getName().toLowerCase(Locale.ROOT) + ":" + alias);
             }
         } catch (ReflectiveOperationException exception) {
-            LOG.warning("Unable to unregister Paper command via reflection: " + root.label() + " - " + exception.getMessage());
+            throw new CommandUnregisterException("Unable to unregister Paper command via reflection: " + root.label(), exception);
         }
     }
 }

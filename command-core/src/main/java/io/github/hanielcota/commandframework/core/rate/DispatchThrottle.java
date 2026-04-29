@@ -9,7 +9,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-public final class DispatchThrottle {
+public final class DispatchThrottle implements AutoCloseable {
 
     private final Cache<String, Bucket> buckets;
     private final Clock clock;
@@ -46,6 +46,12 @@ public final class DispatchThrottle {
             return ThrottleDecision.ALLOWED;
         }
         return ThrottleDecision.DENIED;
+    }
+
+    @Override
+    public void close() {
+        buckets.invalidateAll();
+        buckets.cleanUp();
     }
 
     private Bucket newBucket() {

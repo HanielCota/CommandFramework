@@ -7,7 +7,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-public final class ActorMessageDebouncer {
+public final class ActorMessageDebouncer implements AutoCloseable {
 
     private final Cache<DebounceKey, Long> recentMessages;
     private final Clock clock;
@@ -33,18 +33,22 @@ public final class ActorMessageDebouncer {
     public boolean shouldSend(String actorId, String message) {
         Objects.requireNonNull(actorId, "actorId");
         Objects.requireNonNull(message, "message");
-        DebounceKey key = new DebounceKey(actorId, message);
-
         long now = clock.millis();
-        java.util.concurrent.atomic.AtomicBoolean allowed = new java.util.concurrent.atomic.AtomicBoolean(false);
-        recentMessages.asMap().compute(key, (ignored, previous) -> {
+        boolean[] allowed = new boolean[1];
+        recentMessages.asMap().compute(new DebounceKey(actorId, message), (ignored, previous) -> {
             if (previous != null && now - previous <= window.toMillis()) {
                 return previous;
             }
-            allowed.set(true);
+            allowed[0] = true;
             return now;
         });
-        return allowed.get();
+        return allowed[0];
+    }
+
+    @Override
+    public void close() {
+        recentMessages.invalidateAll();
+        recentMessages.cleanUp();
     }
 
     private static Duration expireAfterWindow(Duration window) {

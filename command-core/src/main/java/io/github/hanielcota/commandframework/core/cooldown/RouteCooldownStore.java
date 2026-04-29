@@ -11,7 +11,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-public final class RouteCooldownStore {
+public final class RouteCooldownStore implements AutoCloseable {
 
     private final Cache<CooldownKey, Long> expiresAtMillis;
     private final Clock clock;
@@ -50,6 +50,12 @@ public final class RouteCooldownStore {
             return now + cooldown.toMillis();
         });
         return claim.get();
+    }
+
+    @Override
+    public void close() {
+        expiresAtMillis.invalidateAll();
+        expiresAtMillis.cleanUp();
     }
 
     private static final class ExpirationTimeExpiry implements Expiry<CooldownKey, Long> {

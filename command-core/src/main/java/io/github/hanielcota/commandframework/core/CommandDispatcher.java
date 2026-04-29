@@ -63,7 +63,10 @@ public final class CommandDispatcher {
     private CommandDispatcher(Builder builder) {
         this.registry = builder.registry;
         this.validator = new PreDispatchValidator(builder.throttle, builder.sanitizer);
-        this.messenger = new CommandMessenger(builder.messages, builder.debouncer);
+        ActorMessageDebouncer resolvedDebouncer = builder.debouncer != null
+                ? builder.debouncer
+                : new ActorMessageDebouncer(builder.messageDebounce);
+        this.messenger = new CommandMessenger(builder.messages, resolvedDebouncer);
         this.suggestions = new CommandSuggestionEngine(registry);
         this.logger = builder.logger;
         this.safeLogText = new SafeLogText();
@@ -74,9 +77,19 @@ public final class CommandDispatcher {
                 logger,
                 safeLogText
         );
-        this.asyncExecutor = builder.asyncExecutor;
+        this.asyncExecutor = resolveAsyncExecutor(builder);
         this.metrics = builder.metrics;
         this.overlay = new ConfigurationOverlay(builder.configuration);
+    }
+
+    private static Executor resolveAsyncExecutor(Builder builder) {
+        if (builder.asyncExecutor != null) {
+            return builder.asyncExecutor;
+        }
+        if (builder.useVirtualThreads) {
+            return command -> Thread.ofVirtual().start(command);
+        }
+        return null;
     }
 
     private static CommandDispatchStage buildPipeline(
@@ -215,12 +228,14 @@ public final class CommandDispatcher {
         private RouteCooldownStore cooldownStore = new RouteCooldownStore();
         private DispatchThrottle throttle = new DispatchThrottle(30, Duration.ofSeconds(2));
         private InputSanitizer sanitizer = new InputSanitizer(32, 128);
-        private final ActorMessageDebouncer debouncer = new ActorMessageDebouncer(Duration.ofMillis(750));
+        private Duration messageDebounce = Duration.ofMillis(750);
+        private ActorMessageDebouncer debouncer;
         private CommandMessageProvider messages = new DefaultCommandMessageProvider();
         private CommandLogger logger = CommandLogger.noop();
         private CommandMetrics metrics = CommandMetrics.noop();
         private CommandConfiguration configuration = CommandConfiguration.empty();
         private Executor asyncExecutor;
+        private boolean useVirtualThreads = false;
 
         public Builder cooldownStore(RouteCooldownStore cooldownStore) {
             this.cooldownStore = Objects.requireNonNull(cooldownStore, "cooldownStore");
@@ -229,6 +244,17 @@ public final class CommandDispatcher {
 
         public Builder throttle(DispatchThrottle throttle) {
             this.throttle = Objects.requireNonNull(throttle, "throttle");
+            return this;
+        }
+
+        public Builder messageDebounce(Duration messageDebounce) {
+            this.messageDebounce = Objects.requireNonNull(messageDebounce, "messageDebounce");
+            this.debouncer = null;
+            return this;
+        }
+
+        public Builder debouncer(ActorMessageDebouncer debouncer) {
+            this.debouncer = Objects.requireNonNull(debouncer, "debouncer");
             return this;
         }
 
@@ -254,6 +280,11 @@ public final class CommandDispatcher {
 
         public Builder asyncExecutor(Executor executor) {
             this.asyncExecutor = Objects.requireNonNull(executor, "executor");
+            return this;
+        }
+
+        public Builder virtualThreads(boolean useVirtualThreads) {
+            this.useVirtualThreads = useVirtualThreads;
             return this;
         }
 

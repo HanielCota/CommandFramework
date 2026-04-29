@@ -75,7 +75,7 @@ subprojects {
 
     val pitestConfiguration = configurations.maybeCreate("pitest")
     dependencies.add("pitest", "org.pitest:pitest-command-line:${rootProject.libs.versions.pitest.get()}")
-    dependencies.add("pitest", "org.pitest:pitest-junit5-plugin:1.2.3")
+    dependencies.add("pitest", "org.pitest:pitest-junit5-plugin:1.2.4")
 
     tasks.register<JavaExec>("pitest") {
         group = "verification"

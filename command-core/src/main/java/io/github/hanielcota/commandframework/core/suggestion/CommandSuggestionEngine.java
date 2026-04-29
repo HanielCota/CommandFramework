@@ -50,6 +50,9 @@ public record CommandSuggestionEngine(RouteResolver resolver) {
     }
 
     private List<String> suggestChild(CommandRoot root, List<String> arguments) {
+        if (arguments.isEmpty()) {
+            return List.of();
+        }
         String current = arguments.getLast();
         Optional<CommandNode> parent = parentNode(root, arguments);
         return parent.map(node -> node.childLiteralsStartingWith(NORMALIZER.normalize(current)))

@@ -15,6 +15,13 @@ public final class CommandNode {
     private volatile @Nullable CommandRoute route;
     private volatile @Nullable CommandRoute defaultRoute;
 
+    /**
+     * Thread-safety: Route fields are volatile for safe publication.
+     * Setters are synchronized to enforce exclusive access during mutation.
+     * Getters are not synchronized but are safe for concurrent reads due to volatile.
+     * Registration/unregistration should happen during startup, not concurrently with reads.
+     */
+
     public CommandNode(String literal) {
         this.literal = Objects.requireNonNull(literal, "literal");
     }
